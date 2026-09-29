@@ -1,9 +1,41 @@
-# Banco de Dados
-MySQL | RedeSulanca
+## Modelo conceitual
 
-Banco relacional em **MySQL 8** com 10 tabelas. Não há relacionamentos N:M, então nenhuma tabela associativa foi necessária.
+No modelo conceitual não aparecem chaves estrangeiras: elas surgem como colunas só no modelo lógico.
 
-## Diagrama Entidade-Relacionamento
+```mermaid
+erDiagram
+    CIDADE ||--o{ CONFECCAO : localiza
+    CONFECCAO |o--o{ USUARIO : possui
+    CONFECCAO ||--o{ LANCAMENTO_MENSAL : informa
+    CATEGORIA ||--o{ LANCAMENTO_MENSAL : classifica
+    IMPORTACAO |o--o{ LANCAMENTO_MENSAL : origina
+    USUARIO ||--o{ IMPORTACAO : realiza
+    USUARIO ||--o{ CENARIO_CONCORRENCIA : cria
+    USUARIO ||--o{ RELATORIO : gera
+    CATEGORIA |o--o{ CENARIO_CONCORRENCIA : simula
+    CENARIO_CONCORRENCIA |o--o{ RELATORIO : fundamenta
+    RELATORIO ||--|{ ITEM_RELATORIO : possui
+    CATEGORIA |o--o{ ITEM_RELATORIO : agrupa
+    CONFECCAO ||--o{ ENTREVISTA : responde
+    CATEGORIA |o--o{ ENTREVISTA : "é percebida em"
+```
+
+### Entidades e atributos
+
+| Entidade | Identificador | Demais atributos |
+|---|---|---|
+| **Cidade** | id_cidade | nome, uf |
+| **Confecção** | id_confeccao | nome, cnpj (opcional), porte (micro, pequena, média), tipo (confecção, facção) |
+| **Usuário** | id_usuario | nome, email, senha_hash, perfil (ADMIN, CONFECCAO) |
+| **Categoria** | id_categoria | nome |
+| **Lançamento mensal** | id_lancamento | mes_referencia, quantidade, faturamento, origem (MANUAL, IMPORTACAO), status (ATIVO, CANCELADO) |
+| **Importação** | id_importacao | nome_arquivo, data_importacao, qtd_linhas, status (CONCLUIDA, ERRO) |
+| **Cenário de concorrência** | id_cenario | nome, percentual_impacto, descricao (opcional) |
+| **Entrevista** | id_entrevista | data, resumo, achou_algo_novo (sim, não) |
+| **Relatório** | id_relatorio | tipo (REGIONAL, CATEGORIA_PERIODO, TENDENCIA, CENARIO), periodo_inicio, periodo_fim, limiar_tendencia, data_geracao |
+| **Item de relatório** | id_item | uf (opcional), quantidade, faturamento, variacao_percentual, tendencia (ALTA, QUEDA, ESTAVEL) |
+
+## Modelo lógico
 
 ```mermaid
 erDiagram
@@ -106,7 +138,7 @@ erDiagram
 
 **Legenda da cardinalidade:** `||` = exatamente 1 · `|o` = 0 ou 1 · `o{` = 0 ou N · `|{` = 1 ou N
 
-## Relacionamentos (modelo conceitual)
+## Relacionamentos e cardinalidades
 
 | Entidade A | Relacionamento | Entidade B |
 |---|---|---|
@@ -175,14 +207,18 @@ Em um relacionamento 1:N, a FK fica no lado N. Se a cardinalidade desse lado é 
 | 8 | Tendência pela variação comparada ao limiar | Calculada ao gerar o relatório |
 | 9 | Entrevista registra a categoria que o empresário *acha* que mais vende | `id_categoria_percebida` |
 
+## Arquivos
+
+| Arquivo | Conteúdo |
+|---|---|
+| [schema.sql](schema.sql) | Criação do banco e das 10 tabelas |
+
 ## Como executar
 
-Rode os scripts **nesta ordem**:
+O `schema.sql` já cria o banco `confeccoes`:
 
 ```bash
 mysql -u root -p < schema.sql
-mysql -u root -p confeccoes < views.sql
-mysql -u root -p confeccoes < triggers.sql
-mysql -u root -p confeccoes < transacoes.sql
-mysql -u root -p confeccoes < seed.sql
 ```
+
+Pelo **MySQL Workbench**: abra o arquivo em *File → Open SQL Script* e execute (⚡).
