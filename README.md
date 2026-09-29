@@ -1,4 +1,4 @@
-MySQL | RedeSulanca
+SQL | RedeSulanca
 
 # Banco de Dados
 
