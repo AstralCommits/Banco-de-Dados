@@ -138,7 +138,18 @@ erDiagram
         int     id_confeccao FK
         int     id_categoria_percebida FK "opcional"
     }
+    log_lancamento {
+        int       id_log PK
+        int       id_lancamento "sem FK"
+        varchar   acao "UPDATE | DELETE"
+        int       quantidade_antiga
+        decimal   faturamento_antigo
+        varchar   status_antigo
+        datetime  data_log
+    }
 ```
+
+`log_lancamento` é uma tabela de auditoria e não faz parte do modelo conceitual. Os triggers a preenchem. Ela não tem FK para `lancamento_mensal` porque o registro precisa continuar existindo depois que o lançamento é excluído.
 
 **Legenda da cardinalidade:** `||` = exatamente 1 · `|o` = 0 ou 1 · `o{` = 0 ou N · `|{` = 1 ou N
 
@@ -204,25 +215,76 @@ Em um relacionamento 1:N, a FK fica no lado N. Se a cardinalidade desse lado é 
 | 1 | Cada confecção fica em uma única cidade; CNPJ opcional | `id_cidade NOT NULL`, `cnpj` aceita NULL |
 | 2 | ADMIN não tem confecção; CONFECCAO tem exatamente uma | `id_confeccao` opcional; combinação validada pelo sistema |
 | 3 | Um lançamento por confecção, categoria e mês | `UNIQUE (id_confeccao, id_categoria, mes_referencia)` |
-| 4 | Lançamento cancelado fica fora dos indicadores e relatórios | Views filtram `lanc_status = 'ATIVO'` |
+| 4 | Lançamento cancelado fica fora dos indicadores e relatórios | Procedure `cancelar_lancamento` muda o status sem apagar; as consultas filtram `lanc_status = 'ATIVO'` |
 | 5 | Linha inválida na planilha: nada da importação é gravado | Transação em `transacoes.sql` |
 | 6 | Impacto entre 0 e 100; cenário sem categoria vale para todas | `id_categoria` opcional; faixa 0–100 validada pelo sistema |
 | 7 | Relatório CENARIO exige cenário; regionais usam PE, PB ou AL | UF (PE, PB ou AL) e cenário obrigatório validados pelo sistema |
 | 8 | Tendência pela variação comparada ao limiar | Calculada ao gerar o relatório |
 | 9 | Entrevista registra a categoria que o empresário *acha* que mais vende | `id_categoria_percebida` |
 
+## Procedures
+
+| Procedure | Parâmetros | O que faz |
+|---|---|---|
+| `inserir_lancamento` | mês, quantidade, faturamento, confecção, categoria | Grava um lançamento MANUAL e ATIVO; qualquer dia do mês vira dia 1 |
+| `atualizar_lancamento` | id do lançamento, quantidade, faturamento | Corrige quantidade e faturamento |
+| `cancelar_lancamento` | id do lançamento | Muda o status para CANCELADO, sem apagar (regra 4) |
+| `excluir_lancamento` | id do lançamento | Apaga o lançamento de vez |
+
+## Triggers
+
+| Trigger | Quando dispara | O que grava em `log_lancamento` |
+|---|---|---|
+| `trg_log_lancamento_update` | Depois de um UPDATE em `lancamento_mensal` | Ação `UPDATE` e os valores antigos (`OLD`) de quantidade, faturamento e status |
+| `trg_log_lancamento_delete` | Depois de um DELETE em `lancamento_mensal` | Ação `DELETE` e os valores do lançamento apagado |
+
+Cancelar um lançamento também gera log, porque o cancelamento é um UPDATE no status.
+
+## Transações
+
+| # | Situação | Resultado |
+|---|---|---|
+| 1 | Importação de planilha sem erros | `COMMIT`: a importação e as linhas são gravadas juntas |
+| 2 | Importação com uma linha inválida | `ROLLBACK`: nada da importação é gravado (regra 5); depois só a tentativa é registrada com status ERRO |
+| 3 | Geração de relatório com um item digitado errado | `ROLLBACK TO SAVEPOINT`: desfaz só o item errado e mantém os anteriores, depois `COMMIT` |
+| 4 | Relatório sem nenhum item | `ROLLBACK`: todo relatório precisa de pelo menos um item |
+
+## Consultas
+
+O `consultas.sql` traz 10 consultas que juntam as tabelas com `INNER JOIN` e `LEFT JOIN` e usam `COUNT`, `AVG`, `MAX` e `MIN` com `GROUP BY`. Entre elas:
+
+- confecções com cidade e UF;
+- lançamentos ativos por UF e faturamento médio por categoria;
+- usuários que nunca fizeram importação (`LEFT JOIN`);
+- relatórios com o cenário usado e a quantidade de itens;
+- histórico de alterações gravado pelos triggers.
+
 ## Arquivos
 
 | Arquivo | Conteúdo |
 |---|---|
-| [schema.sql](schema.sql) | Criação do banco e das 10 tabelas |
+| [schema.sql](database/schema.sql) | Criação do banco, das 10 tabelas e da tabela de auditoria `log_lancamento` |
+| [inserts.sql](database/inserts.sql) | Dados de exemplo para todas as tabelas |
+| [procedures.sql](database/procedures.sql) | Procedures para inserir, atualizar, cancelar e excluir lançamentos |
+| [triggers.sql](database/triggers.sql) | Triggers que gravam o log de UPDATE e DELETE em lançamentos, com testes |
+| [transacoes.sql](database/transacoes.sql) | Transações de importação e de geração de relatório (`COMMIT`, `ROLLBACK`, `SAVEPOINT`) |
+| [selects.sql](database/selects.sql) | Consulta de todos os registros de cada tabela |
+| [consultas.sql](database/consultas.sql) | Consultas com `INNER JOIN`, `LEFT JOIN`, `GROUP BY`, `COUNT`, `AVG`, `MAX` e `MIN` |
 
 ## Como executar
 
-O `schema.sql` já cria o banco `confeccoes`:
+O `schema.sql` já cria o banco `confeccoes`. Rode os arquivos nesta ordem, porque cada um depende do anterior:
 
 ```bash
-mysql -u root -p < schema.sql
+mysql -u root -p < database/schema.sql
+mysql -u root -p < database/inserts.sql
+mysql -u root -p < database/procedures.sql
+mysql -u root -p < database/triggers.sql
+mysql -u root -p < database/transacoes.sql
+mysql -u root -p < database/selects.sql
+mysql -u root -p < database/consultas.sql
 ```
 
-Pelo **MySQL Workbench**: abra o arquivo em *File → Open SQL Script* e execute (⚡).
+Para recomeçar do zero, apague o banco antes com `DROP DATABASE confeccoes;`.
+
+Pelo **MySQL Workbench**: abra cada arquivo em *File → Open SQL Script* e execute (⚡), na mesma ordem.
