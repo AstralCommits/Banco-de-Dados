@@ -22,6 +22,7 @@ erDiagram
     CATEGORIA |o--o{ ITEM_RELATORIO : agrupa
     CONFECCAO ||--o{ ENTREVISTA : responde
     CATEGORIA |o--o{ ENTREVISTA : "é percebida em"
+    LANCAMENTO_MENSAL ||--o{ HISTORICO_LANCAMENTO : registra
 ```
 
 ### Entidades e atributos
@@ -38,6 +39,7 @@ erDiagram
 | **Entrevista** | id_entrevista | data, resumo, achou_algo_novo (sim, não) |
 | **Relatório** | id_relatorio | tipo (REGIONAL, CATEGORIA_PERIODO, TENDENCIA, CENARIO), periodo_inicio, periodo_fim, limiar_tendencia, data_geracao |
 | **Item de relatório** | id_item | uf (opcional), quantidade, faturamento, variacao_percentual, tendencia (ALTA, QUEDA, ESTAVEL) |
+| **Histórico de lançamento** | id_log | acao (UPDATE, DELETE), quantidade_antiga, faturamento_antigo, status_antigo, data_log |
 
 ## Modelo lógico
 
@@ -57,6 +59,7 @@ erDiagram
     categoria            |o--o{ item_relatorio       : agrupa
     confeccao            ||--o{ entrevista           : responde
     categoria            |o--o{ entrevista           : "é percebida em"
+    lancamento_mensal    ||..o{ log_lancamento       : registra
 
     cidade {
         int     id_cidade PK
@@ -149,7 +152,7 @@ erDiagram
     }
 ```
 
-`log_lancamento` é uma tabela de auditoria e não faz parte do modelo conceitual. Os triggers a preenchem. Ela não tem FK para `lancamento_mensal` porque o registro precisa continuar existindo depois que o lançamento é excluído.
+`log_lancamento` implementa a entidade Histórico de lançamento e é preenchida pelos triggers. A linha tracejada indica que `id_lancamento` **não é FK**: o registro do histórico precisa continuar existindo depois que o lançamento é excluído, e uma FK impediria isso.
 
 **Legenda da cardinalidade:** `||` = exatamente 1 · `|o` = 0 ou 1 · `o{` = 0 ou N · `|{` = 1 ou N
 
@@ -171,21 +174,22 @@ erDiagram
 | Categoria (0,N) | agrupa | Item de relatório (0,1) |
 | Confecção (0,N) | responde | Entrevista (1,1) |
 | Categoria (0,N) | é percebida em | Entrevista (0,1) |
+| Lançamento mensal (0,N) | registra | Histórico de lançamento (1,1) |
 
 ### Justificativa das cardinalidades opcionais
 
-Cada participação (0,1) do modelo existe por causa de uma regra do minimundo:
+Cada participação (0,1) do modelo existe por causa de uma regra do [minimundo](docs/minimundo.md):
 
 | Relacionamento | Por que é (0,1) | Regra | Garantia no banco |
 |---|---|---|---|
-| Confecção → Usuário | O ADMIN não pertence a nenhuma confecção | 2 | `id_confeccao` aceita NULL; perfil validado pelo sistema |
-| Importação → Lançamento mensal | O lançamento pode ser digitado à mão (origem MANUAL) | 4 | `id_importacao` aceita NULL; `origem` guarda MANUAL ou IMPORTACAO |
-| Categoria → Cenário de concorrência | Um cenário sem categoria vale para todas | 6 | FK aceita NULL |
-| Cenário de concorrência → Relatório | Só o relatório do tipo CENARIO usa cenário | 7 | `id_cenario` aceita NULL; tipo validado pelo sistema |
-| Categoria → Item de relatório | O relatório REGIONAL agrupa por UF, não por categoria | 7 | `id_categoria` aceita NULL; UF ou categoria validado pelo sistema |
-| Categoria → Entrevista | O empresário pode não saber ou não responder qual categoria vende mais | 9 | FK aceita NULL |
+| Confecção → Usuário | O ADMIN não pertence a nenhuma confecção | RN02 | `id_confeccao` aceita NULL; perfil validado pelo sistema |
+| Importação → Lançamento mensal | O lançamento pode ser digitado à mão (origem MANUAL) | — | `id_importacao` aceita NULL; `origem` guarda MANUAL ou IMPORTACAO |
+| Categoria → Cenário de concorrência | Um cenário sem categoria vale para todas | RN06 | FK aceita NULL |
+| Cenário de concorrência → Relatório | Só o relatório do tipo CENARIO usa cenário | RN07 | `id_cenario` aceita NULL; tipo validado pelo sistema |
+| Categoria → Item de relatório | O relatório REGIONAL agrupa por UF, não por categoria | RN07 | `id_categoria` aceita NULL; UF ou categoria validado pelo sistema |
+| Categoria → Entrevista | O empresário pode não saber ou não responder qual categoria vende mais | RN09 | FK aceita NULL |
 
-**Relatório (1,N) → Item de relatório:** a exigência de pelo menos um item não pode ser garantida por FK, porque o relatório é gravado antes dos itens. Quem garante é a transação de geração do relatório (`transacoes.sql`): se nenhum item for gerado, ela faz `ROLLBACK`.
+**Relatório (1,N) → Item de relatório (RN10):** a exigência de pelo menos um item não pode ser garantida por FK, porque o relatório é gravado antes dos itens. Quem garante é a transação de geração do relatório (`transacoes.sql`): se nenhum item for gerado, ela faz `ROLLBACK`.
 
 ## Chaves estrangeiras (modelo lógico)
 
@@ -210,17 +214,21 @@ Em um relacionamento 1:N, a FK fica no lado N. Se a cardinalidade desse lado é 
 
 ## Regras do minimundo e onde são garantidas
 
+A numeração segue o [minimundo](docs/minimundo.md).
+
 | # | Regra | Implementação |
 |---|---|---|
-| 1 | Cada confecção fica em uma única cidade; CNPJ opcional | `id_cidade NOT NULL`, `cnpj` aceita NULL |
-| 2 | ADMIN não tem confecção; CONFECCAO tem exatamente uma | `id_confeccao` opcional; combinação validada pelo sistema |
-| 3 | Um lançamento por confecção, categoria e mês | `UNIQUE (id_confeccao, id_categoria, mes_referencia)` |
-| 4 | Lançamento cancelado fica fora dos indicadores e relatórios | Procedure `cancelar_lancamento` muda o status sem apagar; as consultas filtram `lanc_status = 'ATIVO'` |
-| 5 | Linha inválida na planilha: nada da importação é gravado | Transação em `transacoes.sql` |
-| 6 | Impacto entre 0 e 100; cenário sem categoria vale para todas | `id_categoria` opcional; faixa 0–100 validada pelo sistema |
-| 7 | Relatório CENARIO exige cenário; regionais usam PE, PB ou AL | UF (PE, PB ou AL) e cenário obrigatório validados pelo sistema |
-| 8 | Tendência pela variação comparada ao limiar | Calculada ao gerar o relatório |
-| 9 | Entrevista registra a categoria que o empresário *acha* que mais vende | `id_categoria_percebida` |
+| RN01 | Cada confecção fica em uma única cidade; CNPJ opcional, mas sem repetição | `id_cidade NOT NULL`; `cnpj` aceita NULL e é `UNIQUE` |
+| RN02 | ADMIN não tem confecção; CONFECCAO tem exatamente uma | `id_confeccao` opcional; combinação validada pelo sistema |
+| RN03 | Um lançamento por confecção, categoria e mês | `UNIQUE (id_confeccao, id_categoria, mes_referencia)` |
+| RN04 | Lançamento cancelado fica fora dos indicadores e relatórios | Procedure `cancelar_lancamento` muda o status sem apagar; as consultas filtram `lanc_status = 'ATIVO'` |
+| RN05 | Linha inválida na planilha: nada da importação é gravado | Transação em `transacoes.sql` |
+| RN06 | Impacto entre 0 e 100; cenário sem categoria vale para todas | `id_categoria` opcional; faixa 0–100 validada pelo sistema |
+| RN07 | Relatório CENARIO exige cenário; regionais usam PE, PB ou AL | UF (PE, PB ou AL) e cenário obrigatório validados pelo sistema |
+| RN08 | Tendência pela variação comparada ao limiar | Calculada ao gerar o relatório |
+| RN09 | Entrevista registra a categoria que o empresário *acha* que mais vende | `id_categoria_percebida` aceita NULL |
+| RN10 | Todo relatório tem pelo menos um item | Transação em `transacoes.sql` faz `ROLLBACK` se nenhum item for gerado |
+| RN11 | Toda alteração ou exclusão de lançamento fica no histórico | Triggers `trg_log_lancamento_update` e `trg_log_lancamento_delete` |
 
 ## Procedures
 
@@ -228,7 +236,7 @@ Em um relacionamento 1:N, a FK fica no lado N. Se a cardinalidade desse lado é 
 |---|---|---|
 | `inserir_lancamento` | mês, quantidade, faturamento, confecção, categoria | Grava um lançamento MANUAL e ATIVO; qualquer dia do mês vira dia 1 |
 | `atualizar_lancamento` | id do lançamento, quantidade, faturamento | Corrige quantidade e faturamento |
-| `cancelar_lancamento` | id do lançamento | Muda o status para CANCELADO, sem apagar (regra 4) |
+| `cancelar_lancamento` | id do lançamento | Muda o status para CANCELADO, sem apagar (RN04) |
 | `excluir_lancamento` | id do lançamento | Apaga o lançamento de vez |
 
 ## Triggers
@@ -245,9 +253,9 @@ Cancelar um lançamento também gera log, porque o cancelamento é um UPDATE no 
 | # | Situação | Resultado |
 |---|---|---|
 | 1 | Importação de planilha sem erros | `COMMIT`: a importação e as linhas são gravadas juntas |
-| 2 | Importação com uma linha inválida | `ROLLBACK`: nada da importação é gravado (regra 5); depois só a tentativa é registrada com status ERRO |
+| 2 | Importação com uma linha inválida | `ROLLBACK`: nada da importação é gravado (RN05); depois só a tentativa é registrada com status ERRO |
 | 3 | Geração de relatório com um item digitado errado | `ROLLBACK TO SAVEPOINT`: desfaz só o item errado e mantém os anteriores, depois `COMMIT` |
-| 4 | Relatório sem nenhum item | `ROLLBACK`: todo relatório precisa de pelo menos um item |
+| 4 | Relatório sem nenhum item | `ROLLBACK`: todo relatório precisa de pelo menos um item (RN10) |
 
 ## Consultas
 
