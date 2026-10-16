@@ -105,3 +105,15 @@ CREATE TABLE entrevista (
     FOREIGN KEY (id_confeccao) REFERENCES confeccao (id_confeccao),
     FOREIGN KEY (id_categoria_percebida) REFERENCES categoria (id_categoria)
 );
+
+-- Auditoria: preenchida pelos triggers de triggers.sql.
+-- Sem FK em id_lancamento, porque o log precisa sobreviver à exclusão do lançamento.
+CREATE TABLE log_lancamento (
+    id_log INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    id_lancamento INT NOT NULL,
+    acao VARCHAR(10) NOT NULL, -- UPDATE ou DELETE
+    quantidade_antiga INT NOT NULL,
+    faturamento_antigo DECIMAL(12,2) NOT NULL,
+    status_antigo VARCHAR(10) NOT NULL,
+    data_log DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
