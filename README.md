@@ -263,6 +263,8 @@ O `consultas.sql` traz 10 consultas que juntam as tabelas com `INNER JOIN` e `LE
 
 | Arquivo | Conteúdo |
 |---|---|
+| [minimundo.md](docs/minimundo.md) | Minimundo: contexto, usuários, regras de negócio e requisitos |
+| [banco_completo.sql](database/banco_completo.sql) | Todos os arquivos abaixo em um único script, na ordem certa; recria o banco do zero |
 | [schema.sql](database/schema.sql) | Criação do banco, das 10 tabelas e da tabela de auditoria `log_lancamento` |
 | [inserts.sql](database/inserts.sql) | Dados de exemplo para todas as tabelas |
 | [procedures.sql](database/procedures.sql) | Procedures para inserir, atualizar, cancelar e excluir lançamentos |
@@ -273,7 +275,13 @@ O `consultas.sql` traz 10 consultas que juntam as tabelas com `INNER JOIN` e `LE
 
 ## Como executar
 
-O `schema.sql` já cria o banco `confeccoes`. Rode os arquivos nesta ordem, porque cada um depende do anterior:
+O jeito mais simples é rodar o script completo, que apaga e recria o banco `confeccoes` com tudo:
+
+```bash
+mysql -u root -p < database/banco_completo.sql
+```
+
+Se preferir rodar por partes, use os arquivos nesta ordem, porque cada um depende do anterior:
 
 ```bash
 mysql -u root -p < database/schema.sql
