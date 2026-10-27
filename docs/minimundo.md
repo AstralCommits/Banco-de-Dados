@@ -1,8 +1,8 @@
-# Minimundo — RedeSulanca
+# Minimundo — TRAMA
 
 ## 1. Contexto
 
-A RedeSulanca é um sistema para acompanhar as vendas das confecções e facções do Nordeste, com foco no polo de confecções de Pernambuco, Paraíba e Alagoas. Hoje cada empresa controla as próprias vendas em cadernos ou planilhas soltas, e ninguém tem uma visão da região como um todo.
+A TRAMA é um sistema para acompanhar as vendas das confecções e facções do Nordeste, com foco no polo de confecções de Pernambuco, Paraíba e Alagoas. Hoje cada empresa controla as próprias vendas em cadernos ou planilhas soltas, e ninguém tem uma visão da região como um todo.
 
 O sistema reúne, todo mês, quanto cada confecção vendeu em cada categoria de produto. A partir desses dados, ele gera relatórios por estado, por categoria e por período, aponta tendências de alta ou queda e permite simular o efeito da concorrência nas vendas. Além dos números, a rede faz entrevistas com os empresários para comparar o que eles percebem do mercado com o que os dados mostram.
 
