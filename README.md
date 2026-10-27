@@ -305,6 +305,9 @@ As agregações do `consultas.sql` (por UF, categoria e mês) também usam índi
 | [selects.sql](database/selects.sql) | Consulta de todos os registros de cada tabela |
 | [consultas.sql](database/consultas.sql) | Consultas com `INNER JOIN`, `LEFT JOIN`, `GROUP BY`, `COUNT`, `AVG`, `MAX` e `MIN` |
 | [teste_desempenho.sql](database/teste_desempenho.sql) | Teste do RNF01 com 10.000 vendas; não fica no `banco_completo.sql` e não altera os dados |
+| [schema_sqlite.sql](database/schema_sqlite.sql) | Versão SQLite3 do `schema.sql`, com os triggers e a view |
+| [gerar_sqlite.py](database/gerar_sqlite.py) | Gera o `extensao.db` a partir do `schema_sqlite.sql` e do `inserts.sql` |
+| [extensao.db](database/extensao.db) | Banco SQLite pronto, com os dados de exemplo |
 
 ## Como executar
 
@@ -383,3 +386,50 @@ mysql -u root -p < database/teste_desempenho.sql
 Para recomeçar do zero, apague o banco antes com `DROP DATABASE confeccoes;`.
 
 Pelo **MySQL Workbench**: abra cada arquivo em *File → Open SQL Script* e execute (⚡), na mesma ordem.
+## Banco local em SQLite (`extensao.db`)
+
+Para quem precisa de um banco local sem instalar MySQL nem Docker, o repositório traz uma versão SQLite3 do mesmo modelo: as 11 tabelas, todas as chaves primárias e estrangeiras, os `UNIQUE`, os `CHECK`, os dois triggers do histórico de lançamento e a view `vw_lancamentos`, com os mesmos dados de exemplo do `inserts.sql`.
+
+O arquivo pronto é o [`database/extensao.db`](database/extensao.db). Para gerar de novo (depois de mudar o `schema_sqlite.sql` ou o `inserts.sql`), na raiz do repositório:
+
+```bash
+python database/gerar_sqlite.py
+```
+
+O script apaga o `extensao.db` antigo, roda o `schema_sqlite.sql`, carrega o `inserts.sql` (ignorando só a linha `USE confeccoes;`, que é do MySQL) e confere as chaves estrangeiras e a integridade do arquivo. Precisa só do Python 3, que já vem com o SQLite.
+
+Se tiver o [`sqlite3`](https://sqlite.org/download.html) de linha de comando, o mesmo resultado sai com:
+
+```bash
+sqlite3 database/extensao.db < database/schema_sqlite.sql
+```
+
+```bash
+sed '/^USE /d' database/inserts.sql | sqlite3 database/extensao.db
+```
+
+### Diferenças em relação ao MySQL
+
+| MySQL (`schema.sql`) | SQLite (`schema_sqlite.sql`) |
+|---|---|
+| `INT AUTO_INCREMENT PRIMARY KEY` | `INTEGER PRIMARY KEY AUTOINCREMENT` |
+| `VARCHAR(n)`, `CHAR(2)` | `TEXT` (o SQLite não limita tamanho; a UF tem `CHECK (length(uf) = 2)`) |
+| `DECIMAL(12,2)` | `NUMERIC` |
+| `DATE`, `DATETIME` | `TEXT` em ISO 8601 (`AAAA-MM-DD` e `AAAA-MM-DD HH:MM:SS`), validado por `CHECK` |
+| `DAY(mes_referencia) = 1` | `strftime('%d', mes_referencia) = '01'` |
+| Procedures (`procedures.sql`) | Não existem no SQLite: inserir, atualizar, cancelar e excluir lançamentos ficam com o back-end |
+
+`NUMERIC` guarda os valores como número de ponto flutuante quando têm casas decimais, então somas de faturamento podem ter diferenças de centavos em casas muito distantes. Para desenvolvimento local isso não atrapalha; o MySQL continua sendo o banco oficial.
+
+### Usando no back-end
+
+O SQLite **só aplica as chaves estrangeiras quando a conexão liga isso**, e precisa ser em toda conexão. Sem isso, o banco aceita lançamentos de confecções que não existem.
+
+No Spring Boot, com o driver `org.xerial:sqlite-jdbc`:
+
+```properties
+spring.datasource.url=jdbc:sqlite:../Banco-de-Dados/database/extensao.db?foreign_keys=on
+spring.datasource.driver-class-name=org.sqlite.JDBC
+```
+
+Ajuste o caminho para onde o `extensao.db` estiver no seu computador. Em qualquer outro cliente, rode `PRAGMA foreign_keys = ON;` logo depois de abrir a conexão. Para olhar as tabelas e os dados, o [DB Browser for SQLite](https://sqlitebrowser.org/) abre o arquivo direto.
