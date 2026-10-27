@@ -128,15 +128,27 @@ CREATE TABLE entrevista (
     CONSTRAINT chk_entrevista_novo CHECK (achou_algo_novo IN ('SIM','NAO'))
 );
 
-CREATE TABLE log_lancamento (
-    id_log INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+-- Historico (auditoria) de lancamentos, preenchido pelos triggers (RN11).
+-- Guarda uma copia dos dados do lancamento, sem FKs: o registro continua valendo
+-- mesmo depois que o lancamento, a confeccao ou o usuario deixam de existir.
+CREATE TABLE historico_lancamento (
+    id_historico INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     id_lancamento INT NOT NULL,
     acao VARCHAR(10) NOT NULL, -- UPDATE ou DELETE
+    origem VARCHAR(10) NOT NULL, -- MANUAL ou IMPORTACAO, do lancamento alterado
+    mes_referencia DATE NOT NULL,
+    id_confeccao INT NOT NULL,
+    id_categoria INT NOT NULL,
     quantidade_antiga INT NOT NULL,
     faturamento_antigo DECIMAL(12,2) NOT NULL,
     status_antigo VARCHAR(10) NOT NULL,
-    data_log DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT chk_log_acao CHECK (acao IN ('UPDATE','DELETE'))
+    quantidade_nova INT NULL, -- NULL quando a acao e DELETE
+    faturamento_novo DECIMAL(12,2) NULL,
+    status_novo VARCHAR(10) NULL,
+    id_usuario INT NULL, -- quem alterou: vem de @id_usuario, definido pelas procedures
+    data_alteracao DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT chk_hist_acao   CHECK (acao IN ('UPDATE','DELETE')),
+    CONSTRAINT chk_hist_origem CHECK (origem IN ('MANUAL','IMPORTACAO'))
 );
 
 INSERT INTO cidade (id_cidade, nome, uf) VALUES
@@ -282,7 +294,9 @@ CREATE INDEX idx_lancamento_mes_categoria ON lancamento_mensal
 -- Filtro por confeccao e, pela juncao com confeccao, por cidade
 CREATE INDEX idx_lancamento_confeccao ON lancamento_mensal (id_confeccao);
 -- Historico de um lancamento (RN11); id_lancamento nao e FK, entao nao tinha indice
-CREATE INDEX idx_log_lancamento ON log_lancamento (id_lancamento, data_log);
+CREATE INDEX idx_historico_lancamento ON historico_lancamento (id_lancamento, data_alteracao);
+-- Relatorios de auditoria por periodo, filtrando a origem (auditoria.sql)
+CREATE INDEX idx_historico_data ON historico_lancamento (data_alteracao, origem);
 -- Cenarios salvos do usuario, consultados por nome (RF08)
 CREATE INDEX idx_cenario_usuario_nome ON cenario_concorrencia (id_usuario, nome);
 -- Relatorios do usuario, do mais recente ao mais antigo
@@ -334,7 +348,8 @@ DELIMITER $$
 CREATE PROCEDURE atualizar_lancamento(
     IN p_id_lancamento INT,
     IN p_quantidade INT,
-    IN p_faturamento DECIMAL(12,2)
+    IN p_faturamento DECIMAL(12,2),
+    IN p_id_usuario INT
 )
 BEGIN
     -- Nao permite alterar lancamentos ja cancelados
@@ -344,68 +359,206 @@ BEGIN
             SET MESSAGE_TEXT = 'Lancamento cancelado nao pode ser atualizado.';
     END IF;
 
+    -- O trigger le @id_usuario para registrar quem alterou
+    SET @id_usuario = p_id_usuario;
     UPDATE lancamento_mensal
     SET quantidade = p_quantidade,
         faturamento = p_faturamento
     WHERE id_lancamento = p_id_lancamento;
+    SET @id_usuario = NULL;
 END $$
 DELIMITER ;
 
 DELIMITER $$
 CREATE PROCEDURE cancelar_lancamento(
-    IN p_id_lancamento INT
+    IN p_id_lancamento INT,
+    IN p_id_usuario INT
 )
 BEGIN
+    SET @id_usuario = p_id_usuario;
     UPDATE lancamento_mensal
     SET lanc_status = 'CANCELADO'
     WHERE id_lancamento = p_id_lancamento;
+    SET @id_usuario = NULL;
 END $$
 DELIMITER ;
 
 DELIMITER $$
 CREATE PROCEDURE excluir_lancamento(
-    IN p_id_lancamento INT
+    IN p_id_lancamento INT,
+    IN p_id_usuario INT
 )
 BEGIN
+    SET @id_usuario = p_id_usuario;
     DELETE FROM lancamento_mensal
     WHERE id_lancamento = p_id_lancamento;
+    SET @id_usuario = NULL;
 END $$
 DELIMITER ;
 
-DROP TRIGGER IF EXISTS trg_log_lancamento_update;
-DROP TRIGGER IF EXISTS trg_log_lancamento_delete;
+DROP TRIGGER IF EXISTS trg_historico_lancamento_update;
+DROP TRIGGER IF EXISTS trg_historico_lancamento_delete;
 
 DELIMITER $$
-CREATE TRIGGER trg_log_lancamento_update
+CREATE TRIGGER trg_historico_lancamento_update
 AFTER UPDATE ON lancamento_mensal
 FOR EACH ROW
 BEGIN
-    INSERT INTO log_lancamento
-    (id_lancamento, acao, quantidade_antiga, faturamento_antigo, status_antigo)
+    INSERT INTO historico_lancamento
+    (id_lancamento, acao, origem, mes_referencia, id_confeccao, id_categoria,
+     quantidade_antiga, faturamento_antigo, status_antigo,
+     quantidade_nova, faturamento_novo, status_novo, id_usuario)
     VALUES
-    (OLD.id_lancamento, 'UPDATE', OLD.quantidade, OLD.faturamento, OLD.lanc_status);
+    (OLD.id_lancamento, 'UPDATE', OLD.origem, OLD.mes_referencia, OLD.id_confeccao, OLD.id_categoria,
+     OLD.quantidade, OLD.faturamento, OLD.lanc_status,
+     NEW.quantidade, NEW.faturamento, NEW.lanc_status, @id_usuario);
 END $$
 DELIMITER ;
 
 DELIMITER $$
-CREATE TRIGGER trg_log_lancamento_delete
+CREATE TRIGGER trg_historico_lancamento_delete
 AFTER DELETE ON lancamento_mensal
 FOR EACH ROW
 BEGIN
-    INSERT INTO log_lancamento
-    (id_lancamento, acao, quantidade_antiga, faturamento_antigo, status_antigo)
+    INSERT INTO historico_lancamento
+    (id_lancamento, acao, origem, mes_referencia, id_confeccao, id_categoria,
+     quantidade_antiga, faturamento_antigo, status_antigo, id_usuario)
     VALUES
-    (OLD.id_lancamento, 'DELETE', OLD.quantidade, OLD.faturamento, OLD.lanc_status);
+    (OLD.id_lancamento, 'DELETE', OLD.origem, OLD.mes_referencia, OLD.id_confeccao, OLD.id_categoria,
+     OLD.quantidade, OLD.faturamento, OLD.lanc_status, @id_usuario);
 END $$
 DELIMITER ;
 
 CALL inserir_lancamento('2026-03-15', 360, 25200.00, 4, 4);
 SET @id_novo = LAST_INSERT_ID();
 SELECT * FROM lancamento_mensal WHERE id_lancamento = @id_novo;
-CALL atualizar_lancamento(10, 350, 24500.00);
-CALL cancelar_lancamento(8);
-CALL excluir_lancamento(@id_novo);
-SELECT * FROM log_lancamento;
+CALL atualizar_lancamento(10, 350, 24500.00, 5);
+CALL cancelar_lancamento(8, 4);
+CALL excluir_lancamento(@id_novo, 1);
+SELECT * FROM historico_lancamento;
+
+-- Auditoria do historico de lancamentos (RN11 / RF06).
+-- p_origem: 'MANUAL' para monitorar so as alteracoes de lancamentos digitados a mao,
+-- 'IMPORTACAO' para os que vieram de planilha, ou NULL para todos.
+
+-- Historico com os nomes da confeccao, categoria, cidade e usuario e a diferenca entre antes e depois.
+-- LEFT JOIN porque o historico nao tem FK: a confeccao, a categoria ou o usuario podem nao existir mais.
+CREATE OR REPLACE VIEW vw_historico_lancamento AS
+SELECT h.id_historico,
+       h.data_alteracao,
+       h.acao,
+       h.origem,
+       h.id_lancamento,
+       h.mes_referencia,
+       h.id_confeccao,
+       c.nome AS confeccao,
+       ci.nome AS cidade,
+       ci.uf,
+       h.id_categoria,
+       cat.nome AS categoria,
+       h.quantidade_antiga,
+       h.quantidade_nova,
+       h.quantidade_nova - h.quantidade_antiga AS diferenca_quantidade,
+       h.faturamento_antigo,
+       h.faturamento_novo,
+       h.faturamento_novo - h.faturamento_antigo AS diferenca_faturamento,
+       h.status_antigo,
+       h.status_novo,
+       h.id_usuario,
+       COALESCE(u.nome, 'Nao identificado') AS usuario
+FROM historico_lancamento h
+LEFT JOIN confeccao c   ON h.id_confeccao = c.id_confeccao
+LEFT JOIN cidade ci     ON c.id_cidade = ci.id_cidade
+LEFT JOIN categoria cat ON h.id_categoria = cat.id_categoria
+LEFT JOIN usuario u     ON h.id_usuario = u.id_usuario;
+
+DROP PROCEDURE IF EXISTS relatorio_historico_periodo;
+DROP PROCEDURE IF EXISTS relatorio_alteracoes_por_usuario;
+DROP PROCEDURE IF EXISTS relatorio_alteracoes_por_confeccao;
+
+-- Todas as alteracoes do periodo, da mais recente para a mais antiga
+DELIMITER $$
+CREATE PROCEDURE relatorio_historico_periodo(
+    IN p_inicio DATE,
+    IN p_fim DATE,
+    IN p_origem VARCHAR(10)
+)
+BEGIN
+    SELECT data_alteracao, acao, origem, id_lancamento, mes_referencia,
+           confeccao, categoria,
+           quantidade_antiga, quantidade_nova,
+           faturamento_antigo, faturamento_novo, diferenca_faturamento,
+           status_antigo, status_novo, usuario
+    FROM vw_historico_lancamento
+    WHERE data_alteracao >= p_inicio
+      AND data_alteracao < p_fim + INTERVAL 1 DAY
+      AND (p_origem IS NULL OR origem = p_origem)
+    ORDER BY data_alteracao DESC, id_historico DESC;
+END $$
+DELIMITER ;
+
+-- Quantas correcoes, cancelamentos e exclusoes cada usuario fez no periodo
+DELIMITER $$
+CREATE PROCEDURE relatorio_alteracoes_por_usuario(
+    IN p_inicio DATE,
+    IN p_fim DATE,
+    IN p_origem VARCHAR(10)
+)
+BEGIN
+    SELECT usuario,
+           COUNT(*) AS total_alteracoes,
+           SUM(acao = 'UPDATE' AND status_novo = status_antigo) AS correcoes,
+           SUM(acao = 'UPDATE' AND status_novo = 'CANCELADO' AND status_antigo = 'ATIVO') AS cancelamentos,
+           SUM(acao = 'DELETE') AS exclusoes,
+           -- impacto nos indicadores: exclusao e cancelamento tiram o faturamento antigo (RN04)
+           SUM(CASE WHEN acao = 'DELETE' OR (status_antigo = 'ATIVO' AND status_novo = 'CANCELADO')
+                    THEN -faturamento_antigo
+                    ELSE diferenca_faturamento END) AS impacto_faturamento,
+           MAX(data_alteracao) AS ultima_alteracao
+    FROM vw_historico_lancamento
+    WHERE data_alteracao >= p_inicio
+      AND data_alteracao < p_fim + INTERVAL 1 DAY
+      AND (p_origem IS NULL OR origem = p_origem)
+    GROUP BY id_usuario, usuario
+    ORDER BY total_alteracoes DESC;
+END $$
+DELIMITER ;
+
+-- Quantas alteracoes cada confeccao teve no periodo e quanto o faturamento informado mudou
+DELIMITER $$
+CREATE PROCEDURE relatorio_alteracoes_por_confeccao(
+    IN p_inicio DATE,
+    IN p_fim DATE,
+    IN p_origem VARCHAR(10)
+)
+BEGIN
+    SELECT confeccao,
+           cidade,
+           uf,
+           COUNT(*) AS total_alteracoes,
+           COUNT(DISTINCT id_lancamento) AS lancamentos_alterados,
+           SUM(acao = 'UPDATE' AND status_novo = status_antigo) AS correcoes,
+           SUM(acao = 'UPDATE' AND status_novo = 'CANCELADO' AND status_antigo = 'ATIVO') AS cancelamentos,
+           SUM(acao = 'DELETE') AS exclusoes,
+           -- impacto nos indicadores: exclusao e cancelamento tiram o faturamento antigo (RN04)
+           SUM(CASE WHEN acao = 'DELETE' OR (status_antigo = 'ATIVO' AND status_novo = 'CANCELADO')
+                    THEN -faturamento_antigo
+                    ELSE diferenca_faturamento END) AS impacto_faturamento
+    FROM vw_historico_lancamento
+    WHERE data_alteracao >= p_inicio
+      AND data_alteracao < p_fim + INTERVAL 1 DAY
+      AND (p_origem IS NULL OR origem = p_origem)
+    GROUP BY id_confeccao, confeccao, cidade, uf
+    ORDER BY total_alteracoes DESC;
+END $$
+DELIMITER ;
+
+-- Teste: relatorios do dia de hoje, com o historico gravado pelos testes do triggers.sql
+SELECT * FROM vw_historico_lancamento;
+CALL relatorio_historico_periodo(CURDATE(), CURDATE(), NULL);
+CALL relatorio_historico_periodo(CURDATE(), CURDATE(), 'MANUAL');
+CALL relatorio_alteracoes_por_usuario(CURDATE(), CURDATE(), NULL);
+CALL relatorio_alteracoes_por_confeccao(CURDATE(), CURDATE(), 'MANUAL');
 
 START TRANSACTION;
 

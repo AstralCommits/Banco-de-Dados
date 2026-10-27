@@ -38,7 +38,7 @@ O **lançamento mensal** é o registro central do sistema. Ele informa quantas p
 - Cada confecção só pode ter **um** lançamento por categoria em cada mês.
 - O lançamento pode ser digitado à mão (origem **MANUAL**) ou vir de uma planilha (origem **IMPORTACAO**). Quando vem de planilha, fica ligado à importação que o gerou.
 - Um lançamento errado pode ser **cancelado**. Ele continua guardado no banco, com status CANCELADO, mas deixa de contar nos indicadores e relatórios. Lançamentos válidos têm status ATIVO.
-- Toda alteração ou exclusão de lançamento fica registrada num **histórico (log)**, com os valores de antes da mudança e a data.
+- Toda alteração ou exclusão de lançamento fica registrada num **histórico**, com os valores de antes e de depois da mudança, quem a fez, a data e a origem do lançamento (manual ou planilha). O administrador consulta esse histórico em relatórios por período, por usuário e por confecção.
 
 ### Importações de planilha
 
