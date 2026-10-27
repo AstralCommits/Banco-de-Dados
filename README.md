@@ -328,6 +328,8 @@ Pelo **MySQL Workbench** ou DBeaver, crie uma conexão com os dados da tabela ac
 
 O `banco_completo.sql` só roda quando o volume de dados está vazio. Depois de mudar algum script SQL, use `docker compose down -v` e `docker compose up -d` para recarregar.
 
+A cada push e Pull Request, o GitHub Actions ([`.github/workflows/docker.yml`](.github/workflows/docker.yml)) roda `docker compose up -d`, espera o banco ficar `healthy` e confere que as 11 tabelas existem com dados, além da view, das 4 procedures e dos 2 triggers. O resultado aparece na aba **Actions** do repositório e como ✅ ou ❌ no commit e no Pull Request. Assim, uma mudança nos scripts que quebre a carga inicial é descoberta antes de chegar à `develop`.
+
 ### Com MySQL instalado
 
 O jeito mais simples é rodar o script completo, que apaga e recria o banco `confeccoes` com tudo:

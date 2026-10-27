@@ -11,6 +11,7 @@ Cada versão tem uma tag anotada no Git (`git tag -l -n9` lista todas).
 ### Adicionado
 - `docker-compose.yml` com MySQL 8.0 que carrega o `banco_completo.sql` automaticamente na primeira subida, com healthcheck e credenciais de desenvolvimento (`trama`/`trama`).
 - Instruções de uso com `docker compose up -d` no README.
+- Workflow do GitHub Actions que sobe o `docker compose` e confere tabelas, dados, view, procedures e triggers a cada push e Pull Request.
 
 ## [0.3.1] - 2026-10-27
 
