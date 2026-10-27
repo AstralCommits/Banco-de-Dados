@@ -20,6 +20,7 @@ erDiagram
     CENARIO_CONCORRENCIA |o--o{ RELATORIO : fundamenta
     RELATORIO ||--|{ ITEM_RELATORIO : possui
     CATEGORIA |o--o{ ITEM_RELATORIO : agrupa
+    CIDADE |o--o{ ITEM_RELATORIO : compara
     CONFECCAO ||--o{ ENTREVISTA : responde
     CATEGORIA |o--o{ ENTREVISTA : "é percebida em"
     LANCAMENTO_MENSAL ||--o{ HISTORICO_LANCAMENTO : registra
@@ -30,16 +31,16 @@ erDiagram
 
 | Entidade | Identificador | Demais atributos |
 |---|---|---|
-| **Cidade** | id_cidade | nome, uf |
+| **Cidade** | id_cidade | nome (Toritama, Caruaru ou Santa Cruz do Capibaribe), uf (PE) |
 | **Confecção** | id_confeccao | nome, cnpj (opcional), porte (micro, pequena, média), tipo (confecção, facção) |
 | **Usuário** | id_usuario | nome, email, senha_hash, perfil (ADMIN, CONFECCAO) |
-| **Categoria** | id_categoria | nome |
-| **Lançamento mensal** | id_lancamento | mes_referencia, quantidade, faturamento, origem (MANUAL, IMPORTACAO), status (ATIVO, CANCELADO) |
+| **Categoria** | id_categoria | nome (até 50 caracteres) |
+| **Lançamento mensal** | id_lancamento | mes_referencia, quantidade, faturamento, origem (MANUAL, IMPORTACAO), fonte_dado (ENTREVISTA, QUESTIONARIO, FONTE_SECUNDARIA), status (ATIVO, CANCELADO) |
 | **Importação** | id_importacao | nome_arquivo, data_importacao, qtd_linhas, status (CONCLUIDA, ERRO) |
 | **Cenário de concorrência** | id_cenario | nome, percentual_impacto, descricao (opcional) |
 | **Entrevista** | id_entrevista | data, resumo, achou_algo_novo (sim, não) |
 | **Relatório** | id_relatorio | tipo (REGIONAL, CATEGORIA_PERIODO, TENDENCIA, CENARIO), periodo_inicio, periodo_fim, limiar_tendencia, data_geracao |
-| **Item de relatório** | id_item | uf (opcional), quantidade, faturamento, variacao_percentual, tendencia (ALTA, QUEDA, ESTAVEL) |
+| **Item de relatório** | id_item | quantidade, faturamento, variacao_percentual, tendencia (ALTA, QUEDA, ESTAVEL) |
 | **Histórico de lançamento** | id_historico | acao (UPDATE, DELETE), origem (MANUAL, IMPORTACAO), mes_referencia, quantidade_antiga, faturamento_antigo, status_antigo, quantidade_nova, faturamento_novo, status_novo (os novos ficam vazios no DELETE), data_alteracao |
 
 ## Modelo lógico
@@ -58,6 +59,7 @@ erDiagram
     cenario_concorrencia |o--o{ relatorio            : fundamenta
     relatorio            ||--|{ item_relatorio       : possui
     categoria            |o--o{ item_relatorio       : agrupa
+    cidade               |o--o{ item_relatorio       : compara
     confeccao            ||--o{ entrevista           : responde
     categoria            |o--o{ entrevista           : "é percebida em"
     lancamento_mensal    ||..o{ historico_lancamento : registra
@@ -65,8 +67,8 @@ erDiagram
 
     cidade {
         int     id_cidade PK
-        varchar nome
-        char    uf
+        varchar nome UK "Toritama | Caruaru | Santa Cruz do Capibaribe"
+        char    uf "PE"
     }
     confeccao {
         int     id_confeccao PK
@@ -86,7 +88,7 @@ erDiagram
     }
     categoria {
         int     id_categoria PK
-        varchar nome UK
+        varchar nome UK "até 50 caracteres"
     }
     importacao {
         int       id_importacao PK
@@ -102,6 +104,7 @@ erDiagram
         int     quantidade
         decimal faturamento
         varchar origem "MANUAL | IMPORTACAO"
+        varchar fonte_dado "ENTREVISTA | QUESTIONARIO | FONTE_SECUNDARIA"
         varchar lanc_status "ATIVO | CANCELADO"
         int     id_confeccao FK
         int     id_categoria FK
@@ -127,13 +130,13 @@ erDiagram
     }
     item_relatorio {
         int     id_item PK
-        char    uf "PE | PB | AL, opcional"
         int     quantidade
         decimal faturamento
         decimal variacao_percentual
         varchar tendencia "ALTA | QUEDA | ESTAVEL"
         int     id_relatorio FK
         int     id_categoria FK "opcional"
+        int     id_cidade FK "opcional, usado no REGIONAL"
     }
     entrevista {
         int     id_entrevista PK
@@ -182,6 +185,7 @@ erDiagram
 | Cenário de concorrência (0,N) | fundamenta | Relatório (0,1) |
 | Relatório (1,N) | possui | Item de relatório (1,1) |
 | Categoria (0,N) | agrupa | Item de relatório (0,1) |
+| Cidade (0,N) | compara | Item de relatório (0,1) |
 | Confecção (0,N) | responde | Entrevista (1,1) |
 | Categoria (0,N) | é percebida em | Entrevista (0,1) |
 | Lançamento mensal (0,N) | registra | Histórico de lançamento (1,1) |
@@ -197,7 +201,8 @@ Cada participação (0,1) do modelo existe por causa de uma regra do [minimundo]
 | Importação → Lançamento mensal | O lançamento pode ser digitado à mão (origem MANUAL) | — | `id_importacao` aceita NULL; `origem` guarda MANUAL ou IMPORTACAO |
 | Categoria → Cenário de concorrência | Um cenário sem categoria vale para todas | RN06 | FK aceita NULL |
 | Cenário de concorrência → Relatório | Só o relatório do tipo CENARIO usa cenário | RN07 | `id_cenario` aceita NULL; tipo validado pelo sistema |
-| Categoria → Item de relatório | O relatório REGIONAL agrupa por UF, não por categoria | RN07 | `id_categoria` aceita NULL; UF ou categoria validado pelo sistema |
+| Categoria → Item de relatório | O relatório REGIONAL agrupa por cidade, não por categoria | RN07 | `id_categoria` aceita NULL; cidade ou categoria validado pelo sistema |
+| Cidade → Item de relatório | Só o relatório REGIONAL compara cidades | RN07 | `id_cidade` aceita NULL |
 | Categoria → Entrevista | O empresário pode não saber ou não responder qual categoria vende mais | RN09 | FK aceita NULL |
 
 **Relatório (1,N) → Item de relatório (RN10):** a exigência de pelo menos um item não pode ser garantida por FK, porque o relatório é gravado antes dos itens. Quem garante é a transação de geração do relatório (`transacoes.sql`): se nenhum item for gerado, ela faz `ROLLBACK`.
@@ -220,6 +225,7 @@ Em um relacionamento 1:N, a FK fica no lado N. Se a cardinalidade desse lado é 
 | relatorio | id_cenario | cenario_concorrencia | Não (só para tipo CENARIO) |
 | item_relatorio | id_relatorio | relatorio | Sim |
 | item_relatorio | id_categoria | categoria | Não |
+| item_relatorio | id_cidade | cidade | Não (só no relatório REGIONAL) |
 | entrevista | id_confeccao | confeccao | Sim |
 | entrevista | id_categoria_percebida | categoria | Não |
 
@@ -235,17 +241,19 @@ A numeração segue o [minimundo](docs/minimundo.md).
 | RN04 | Lançamento cancelado fica fora dos indicadores e relatórios | Procedure `cancelar_lancamento` muda o status sem apagar; as consultas filtram `lanc_status = 'ATIVO'` |
 | RN05 | Linha inválida na planilha: nada da importação é gravado | Transação em `transacoes.sql` |
 | RN06 | Impacto entre 0 e 100; cenário sem categoria vale para todas | `id_categoria` opcional; faixa 0–100 validada pelo sistema |
-| RN07 | Relatório CENARIO exige cenário; regionais usam PE, PB ou AL | UF (PE, PB ou AL) e cenário obrigatório validados pelo sistema |
-| RN08 | Tendência pela variação comparada ao limiar | Calculada ao gerar o relatório |
+| RN07 | Relatório CENARIO exige cenário; o REGIONAL compara as cidades do polo | `id_cidade` com FK para `cidade`; cenário obrigatório validado pelo sistema |
+| RN08 | Tendência: ALTA se a variação for **≥ +5%**, QUEDA se for **≤ −5%**, ESTAVEL entre os dois (limites inclusivos) | Calculada ao gerar o relatório; `limiar_tendencia` guarda os 5% usados |
 | RN09 | Entrevista registra a categoria que o empresário *acha* que mais vende | `id_categoria_percebida` aceita NULL |
 | RN10 | Todo relatório tem pelo menos um item | Transação em `transacoes.sql` faz `ROLLBACK` se nenhum item for gerado |
+| RN12 | O sistema atende só Toritama, Caruaru e Santa Cruz do Capibaribe, em PE (RF02) | `CHECK chk_cidade_agreste` e `UNIQUE` no nome da cidade |
+| RN13 | Todo lançamento informa a fonte do dado: entrevista, questionário ou fonte secundária (RF04) | `fonte_dado NOT NULL` com `CHECK chk_lanc_fonte` |
 | RN11 | Toda alteração ou exclusão de lançamento fica no histórico | Triggers `trg_historico_lancamento_update` e `trg_historico_lancamento_delete`; relatórios em `auditoria.sql` |
 
 ## Procedures
 
 | Procedure | Parâmetros | O que faz |
 |---|---|---|
-| `inserir_lancamento` | mês, quantidade, faturamento, confecção, categoria | Grava um lançamento MANUAL e ATIVO; qualquer dia do mês vira dia 1 |
+| `inserir_lancamento` | mês, quantidade, faturamento, confecção, categoria, fonte do dado | Grava um lançamento MANUAL e ATIVO; qualquer dia do mês vira dia 1 |
 | `atualizar_lancamento` | id do lançamento, quantidade, faturamento, id do usuário | Corrige quantidade e faturamento |
 | `cancelar_lancamento` | id do lançamento, id do usuário | Muda o status para CANCELADO, sem apagar (RN04) |
 | `excluir_lancamento` | id do lançamento, id do usuário | Apaga o lançamento de vez |
@@ -292,7 +300,7 @@ CALL relatorio_alteracoes_por_usuario('2026-10-01', '2026-10-31', 'MANUAL');
 O `consultas.sql` traz 10 consultas que juntam as tabelas com `INNER JOIN` e `LEFT JOIN` e usam `COUNT`, `AVG`, `MAX` e `MIN` com `GROUP BY`. Entre elas:
 
 - confecções com cidade e UF;
-- lançamentos ativos por UF e faturamento médio por categoria;
+- lançamentos ativos por cidade e faturamento médio por categoria;
 - usuários que nunca fizeram importação (`LEFT JOIN`);
 - relatórios com o cenário usado e a quantidade de itens;
 - histórico de alterações gravado pelos triggers.
@@ -319,7 +327,7 @@ O `teste_desempenho.sql` gera 10.000 lançamentos dentro de uma transação, rod
 | 12 meses, por categoria | `ALL` (full table scan), 27 ms | `range` em `idx_lancamento_mes_categoria`, 24 ms |
 | 2 meses, por categoria | `ALL` (full table scan), 9 ms | `range` em `idx_lancamento_mes_categoria`, 4 ms |
 
-As agregações do `consultas.sql` (por UF, categoria e mês) também usam índice (`type = ref`), sem *full table scan*. Com esse volume tudo fica muito abaixo dos 3 segundos; os índices tiram o *full table scan* e mantêm a margem quando o número de vendas crescer.
+As agregações do `consultas.sql` (por cidade, categoria e mês) também usam índice (`type = ref`), sem *full table scan*. Com esse volume tudo fica muito abaixo dos 3 segundos; os índices tiram o *full table scan* e mantêm a margem quando o número de vendas crescer.
 
 ## Arquivos
 
@@ -446,7 +454,7 @@ sed '/^USE /d' database/inserts.sql | sqlite3 database/extensao.db
 | MySQL (`schema.sql`) | SQLite (`schema_sqlite.sql`) |
 |---|---|
 | `INT AUTO_INCREMENT PRIMARY KEY` | `INTEGER PRIMARY KEY AUTOINCREMENT` |
-| `VARCHAR(n)`, `CHAR(2)` | `TEXT` (o SQLite não limita tamanho; a UF tem `CHECK (length(uf) = 2)`) |
+| `VARCHAR(n)`, `CHAR(2)` | `TEXT` (o SQLite não limita tamanho; o limite de 50 caracteres da categoria virou `CHECK (length(nome) <= 50)`) |
 | `DECIMAL(12,2)` | `NUMERIC` |
 | `DATE`, `DATETIME` | `TEXT` em ISO 8601 (`AAAA-MM-DD` e `AAAA-MM-DD HH:MM:SS`), validado por `CHECK` |
 | `DAY(mes_referencia) = 1` | `strftime('%d', mes_referencia) = '01'` |

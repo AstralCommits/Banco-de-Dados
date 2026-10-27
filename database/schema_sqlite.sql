@@ -1,7 +1,7 @@
 -- Versao SQLite3 do schema.sql, para persistencia local (arquivo extensao.db).
 -- Adaptacoes em relacao ao MySQL:
 --   INT AUTO_INCREMENT   -> INTEGER PRIMARY KEY AUTOINCREMENT
---   VARCHAR / CHAR       -> TEXT (o SQLite nao limita tamanho; CHAR(2) virou CHECK de length)
+--   VARCHAR / CHAR       -> TEXT (o SQLite nao limita tamanho; os limites viraram CHECK de length)
 --   DECIMAL(p,s)         -> NUMERIC
 --   DATE / DATETIME      -> TEXT no formato ISO 8601 ('AAAA-MM-DD' e 'AAAA-MM-DD HH:MM:SS'), validado por CHECK
 --   DAY(data) = 1        -> strftime('%d', data) = '01'
@@ -28,8 +28,12 @@ DROP TABLE IF EXISTS cidade;
 
 CREATE TABLE cidade (
     id_cidade INTEGER PRIMARY KEY AUTOINCREMENT,
-    nome TEXT NOT NULL,
-    uf TEXT NOT NULL CHECK (length(uf) = 2)
+    nome TEXT NOT NULL UNIQUE,
+    uf TEXT NOT NULL,
+    -- RF02: o TRAMA atende so as tres cidades do Polo Textil do Agreste pernambucano
+    CONSTRAINT chk_cidade_agreste CHECK (
+        uf = 'PE' AND nome IN ('Toritama', 'Caruaru', 'Santa Cruz do Capibaribe')
+    )
 );
 
 CREATE TABLE confeccao (
@@ -61,7 +65,7 @@ CREATE TABLE usuario (
 
 CREATE TABLE categoria (
     id_categoria INTEGER PRIMARY KEY AUTOINCREMENT,
-    nome TEXT NOT NULL UNIQUE
+    nome TEXT NOT NULL UNIQUE CHECK (length(nome) <= 50) -- RF01: ate 50 caracteres
 );
 
 CREATE TABLE importacao (
@@ -81,7 +85,8 @@ CREATE TABLE lancamento_mensal (
     mes_referencia TEXT NOT NULL, -- sempre o dia 1 do mes
     quantidade INTEGER NOT NULL,
     faturamento NUMERIC NOT NULL,
-    origem TEXT NOT NULL, -- MANUAL ou IMPORTACAO
+    origem TEXT NOT NULL, -- MANUAL ou IMPORTACAO: como o dado entrou no sistema
+    fonte_dado TEXT NOT NULL, -- RF04: ENTREVISTA, QUESTIONARIO ou FONTE_SECUNDARIA
     lanc_status TEXT NOT NULL DEFAULT 'ATIVO', -- ATIVO ou CANCELADO
     id_confeccao INTEGER NOT NULL,
     id_categoria INTEGER NOT NULL,
@@ -94,6 +99,7 @@ CREATE TABLE lancamento_mensal (
     CONSTRAINT chk_lanc_data      CHECK (mes_referencia IS date(mes_referencia)),
     CONSTRAINT chk_lanc_dia1      CHECK (strftime('%d', mes_referencia) = '01'),
     CONSTRAINT chk_lanc_origem    CHECK (origem IN ('MANUAL','IMPORTACAO')),
+    CONSTRAINT chk_lanc_fonte     CHECK (fonte_dado IN ('ENTREVISTA','QUESTIONARIO','FONTE_SECUNDARIA')),
     CONSTRAINT chk_lanc_status    CHECK (lanc_status IN ('ATIVO','CANCELADO')),
     CONSTRAINT chk_lanc_quant     CHECK (quantidade >= 0),
     CONSTRAINT chk_lanc_fatur     CHECK (faturamento >= 0)
@@ -132,7 +138,7 @@ CREATE TABLE relatorio (
 
 CREATE TABLE item_relatorio (
     id_item INTEGER PRIMARY KEY AUTOINCREMENT,
-    uf TEXT NULL, -- PE, PB ou AL
+    id_cidade INTEGER NULL, -- cidade comparada no relatorio REGIONAL
     quantidade INTEGER NOT NULL,
     faturamento NUMERIC NOT NULL,
     variacao_percentual NUMERIC NULL,
@@ -141,7 +147,7 @@ CREATE TABLE item_relatorio (
     id_categoria INTEGER NULL,
     FOREIGN KEY (id_relatorio) REFERENCES relatorio (id_relatorio),
     FOREIGN KEY (id_categoria) REFERENCES categoria (id_categoria),
-    CONSTRAINT chk_item_uf CHECK (uf IS NULL OR uf IN ('PE','PB','AL')),
+    FOREIGN KEY (id_cidade) REFERENCES cidade (id_cidade),
     CONSTRAINT chk_item_tendencia CHECK (tendencia IS NULL OR tendencia IN ('ALTA','QUEDA','ESTAVEL'))
 );
 
@@ -215,6 +221,7 @@ SELECT l.id_lancamento,
        l.quantidade,
        l.faturamento,
        l.origem,
+       l.fonte_dado,
        l.lanc_status,
        c.id_confeccao,
        c.nome AS confeccao,

@@ -23,6 +23,11 @@ Cada versão tem uma tag anotada no Git (`git tag -l -n9` lista todas).
 ### Alterado
 - **Incompatível:** a tabela `log_lancamento` passa a se chamar `historico_lancamento` (`id_log` → `id_historico`, `data_log` → `data_alteracao`), e os triggers passam a se chamar `trg_historico_lancamento_update` e `trg_historico_lancamento_delete`.
 - **Incompatível:** `atualizar_lancamento`, `cancelar_lancamento` e `excluir_lancamento` recebem o id do usuário como último parâmetro.
+- **Incompatível (alinhamento ao SRS):** a tabela `cidade` aceita só Toritama, Caruaru e Santa Cruz do Capibaribe, em PE (RF02); os dados de exemplo passam a usar essas cidades.
+- **Incompatível (alinhamento ao SRS):** `lancamento_mensal` ganha a coluna obrigatória `fonte_dado` (ENTREVISTA, QUESTIONARIO ou FONTE_SECUNDARIA, RF04), e `inserir_lancamento` recebe a fonte do dado como último parâmetro.
+- **Incompatível (alinhamento ao SRS):** `item_relatorio.uf` vira `id_cidade` (FK para `cidade`): o relatório REGIONAL compara as cidades do polo em vez de estados.
+- Nome da categoria limitado a 50 caracteres (RF01).
+- Tendência com limiar inclusivo de 5%: ALTA a partir de +5% e QUEDA a partir de −5% (RF06); dados de exemplo corrigidos para seguir a regra.
 
 ## [0.3.1] - 2026-10-27
 

@@ -11,16 +11,17 @@ START TRANSACTION;
 
 INSERT INTO confeccao (id_confeccao, nome, cnpj, porte, tipo, id_cidade)
 WITH RECURSIVE n (i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < 100)
-SELECT 1000 + i, CONCAT('Confeccao Teste ', i), NULL, 'MICRO', 'CONFECCAO', 1 + i % 4
+SELECT 1000 + i, CONCAT('Confeccao Teste ', i), NULL, 'MICRO', 'CONFECCAO', 1 + i % 3
 FROM n;
 
 INSERT INTO lancamento_mensal
-(mes_referencia, quantidade, faturamento, origem, lanc_status, id_confeccao, id_categoria)
+(mes_referencia, quantidade, faturamento, origem, fonte_dado, lanc_status, id_confeccao, id_categoria)
 WITH RECURSIVE n (i) AS (SELECT 0 UNION ALL SELECT i + 1 FROM n WHERE i < 9999)
 SELECT DATE_ADD('2024-07-01', INTERVAL i DIV 500 MONTH),
        100 + (i * 37) % 900,
        (100 + (i * 37) % 900) * (40 + i % 60),
        'MANUAL',
+       ELT(1 + i % 3, 'ENTREVISTA', 'QUESTIONARIO', 'FONTE_SECUNDARIA'),
        IF(i % 20 = 0, 'CANCELADO', 'ATIVO'),
        1001 + i % 100,
        1 + (i DIV 100) % 5
@@ -38,14 +39,14 @@ WHERE mes_referencia BETWEEN '2025-01-01' AND '2025-12-01'
 GROUP BY categoria
 ORDER BY faturamento_total DESC;
 
--- RF06: variacao de cada categoria entre dois meses, classificada pelo limiar de 5%
+-- RF06: variacao de cada categoria entre dois meses; ALTA a partir de +5% e QUEDA a partir de -5% (inclusive)
 SELECT categoria,
        anterior,
        atual,
        ROUND((atual - anterior) / anterior * 100, 2) AS variacao_percentual,
        CASE
-           WHEN (atual - anterior) / anterior * 100 >  5 THEN 'ALTA'
-           WHEN (atual - anterior) / anterior * 100 < -5 THEN 'QUEDA'
+           WHEN (atual - anterior) / anterior * 100 >=  5 THEN 'ALTA'
+           WHEN (atual - anterior) / anterior * 100 <= -5 THEN 'QUEDA'
            ELSE 'ESTAVEL'
        END AS tendencia
 FROM (
