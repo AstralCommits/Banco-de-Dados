@@ -1,0 +1,61 @@
+# Testa o docker-compose.yml: sobe o MySQL, espera o healthcheck e confere
+# que o banco_completo.sql criou todas as tabelas com dados.
+name: Docker MySQL
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  docker-compose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Baixar o repositorio
+        uses: actions/checkout@v4
+
+      - name: Subir o banco com docker compose up -d
+        # --wait so termina quando o healthcheck fica healthy (carga inicial concluida)
+        run: docker compose up -d --wait --wait-timeout 300
+
+      - name: Conferir que as 11 tabelas existem
+        run: |
+          total=$(docker compose exec -T mysql mysql -utrama -ptrama -N -e \
+            "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'confeccoes' AND table_type = 'BASE TABLE'" 2>/dev/null)
+          echo "Tabelas no banco confeccoes: $total"
+          test "$total" -eq 11
+
+      - name: Conferir que todas as tabelas tem dados
+        run: |
+          falhou=0
+          for tabela in cidade confeccao usuario categoria importacao lancamento_mensal \
+                        cenario_concorrencia relatorio item_relatorio entrevista log_lancamento; do
+            linhas=$(docker compose exec -T mysql mysql -utrama -ptrama confeccoes -N -e "SELECT COUNT(*) FROM $tabela" 2>/dev/null)
+            echo "$tabela: $linhas linhas"
+            if [ -z "$linhas" ] || [ "$linhas" -eq 0 ]; then falhou=1; fi
+          done
+          exit $falhou
+
+      - name: Conferir view, procedures e triggers
+        run: |
+          docker compose exec -T mysql mysql -utrama -ptrama confeccoes -e "
+            SELECT COUNT(*) AS linhas_vw_lancamentos FROM vw_lancamentos;
+            SELECT routine_name AS procedures FROM information_schema.routines WHERE routine_schema = 'confeccoes';
+            SELECT trigger_name AS triggers FROM information_schema.triggers WHERE trigger_schema = 'confeccoes';" 2>/dev/null
+          procedures=$(docker compose exec -T mysql mysql -utrama -ptrama -N -e \
+            "SELECT COUNT(*) FROM information_schema.routines WHERE routine_schema = 'confeccoes'" 2>/dev/null)
+          triggers=$(docker compose exec -T mysql mysql -utrama -ptrama -N -e \
+            "SELECT COUNT(*) FROM information_schema.triggers WHERE trigger_schema = 'confeccoes'" 2>/dev/null)
+          test "$procedures" -eq 4 && test "$triggers" -eq 2
+
+      - name: Mostrar o log do MySQL se algo falhar
+        if: failure()
+        run: |
+          docker compose ps
+          docker compose logs mysql
+
+      - name: Derrubar o banco
+        if: always()
+        run: docker compose down -v
