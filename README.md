@@ -267,19 +267,43 @@ O `consultas.sql` traz 10 consultas que juntam as tabelas com `INNER JOIN` e `LE
 - relatórios com o cenário usado e a quantidade de itens;
 - histórico de alterações gravado pelos triggers.
 
+## Índices (RNF01)
+
+O RNF01 pede resposta em até 3 segundos com 10.000 vendas. Além das chaves primárias, dos `UNIQUE` e dos índices que o MySQL cria para cada FK, o `schema.sql` cria:
+
+| Índice | Tabela | Colunas | Para quê |
+|---|---|---|---|
+| `idx_lancamento_mes_categoria` | lancamento_mensal | mes_referencia, id_categoria, id_confeccao, lanc_status, quantidade, faturamento | Agregação de faturamento por período e categoria (RF05/RF06) |
+| `idx_lancamento_confeccao` | lancamento_mensal | id_confeccao | Filtro por confecção e, pela junção com `confeccao`, por cidade |
+| `idx_log_lancamento` | log_lancamento | id_lancamento, data_log | Histórico de um lançamento (RN11); `id_lancamento` não é FK, então não tinha índice |
+| `idx_cenario_usuario_nome` | cenario_concorrencia | id_usuario, nome | Cenários salvos do usuário, consultados por nome (RF08) |
+| `idx_relatorio_usuario_data` | relatorio | id_usuario, data_geracao | Relatórios do usuário, do mais recente ao mais antigo |
+
+`idx_lancamento_mes_categoria` começa por `(mes_referencia, id_categoria)` e termina com as colunas que a consulta filtra e soma. Assim ele **cobre** a consulta: o MySQL lê só o índice, sem voltar à tabela. Sem essas colunas, a agregação de um período longo (12 meses) caía em *full table scan* (`type = ALL` no `EXPLAIN`), porque buscar cada linha pelo índice saía mais caro que ler a tabela inteira.
+
+O `teste_desempenho.sql` gera 10.000 lançamentos dentro de uma transação, roda as consultas de faturamento por categoria (RF05) e de tendência (RF06), mostra o `EXPLAIN` das agregações por período e desfaz tudo com `ROLLBACK`. Em um MySQL 8.0 local, com 10.000 vendas:
+
+| Agregação por período | Sem os índices | Com os índices |
+|---|---|---|
+| 12 meses, por categoria | `ALL` (full table scan), 27 ms | `range` em `idx_lancamento_mes_categoria`, 24 ms |
+| 2 meses, por categoria | `ALL` (full table scan), 9 ms | `range` em `idx_lancamento_mes_categoria`, 4 ms |
+
+As agregações do `consultas.sql` (por UF, categoria e mês) também usam índice (`type = ref`), sem *full table scan*. Com esse volume tudo fica muito abaixo dos 3 segundos; os índices tiram o *full table scan* e mantêm a margem quando o número de vendas crescer.
+
 ## Arquivos
 
 | Arquivo | Conteúdo |
 |---|---|
 | [minimundo.md](docs/minimundo.md) | Minimundo: contexto, usuários, regras de negócio e requisitos |
 | [banco_completo.sql](database/banco_completo.sql) | Todos os arquivos abaixo em um único script, na ordem certa; recria o banco do zero |
-| [schema.sql](database/schema.sql) | Criação do banco, das 10 tabelas e da tabela de auditoria `log_lancamento` |
+| [schema.sql](database/schema.sql) | Criação do banco, das 10 tabelas, da tabela de auditoria `log_lancamento` e dos índices do RNF01 |
 | [inserts.sql](database/inserts.sql) | Dados de exemplo para todas as tabelas |
 | [procedures.sql](database/procedures.sql) | Procedures para inserir, atualizar, cancelar e excluir lançamentos |
 | [triggers.sql](database/triggers.sql) | Triggers que gravam o log de UPDATE e DELETE em lançamentos, com testes |
 | [transacoes.sql](database/transacoes.sql) | Transações de importação e de geração de relatório (`COMMIT`, `ROLLBACK`, `SAVEPOINT`) |
 | [selects.sql](database/selects.sql) | Consulta de todos os registros de cada tabela |
 | [consultas.sql](database/consultas.sql) | Consultas com `INNER JOIN`, `LEFT JOIN`, `GROUP BY`, `COUNT`, `AVG`, `MAX` e `MIN` |
+| [teste_desempenho.sql](database/teste_desempenho.sql) | Teste do RNF01 com 10.000 vendas; não fica no `banco_completo.sql` e não altera os dados |
 
 ## Como executar
 
@@ -299,6 +323,12 @@ mysql -u root -p < database/triggers.sql
 mysql -u root -p < database/transacoes.sql
 mysql -u root -p < database/selects.sql
 mysql -u root -p < database/consultas.sql
+```
+
+Para conferir o desempenho (RNF01), rode depois de criar o banco:
+
+```bash
+mysql -u root -p < database/teste_desempenho.sql
 ```
 
 Para recomeçar do zero, apague o banco antes com `DROP DATABASE confeccoes;`.
