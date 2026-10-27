@@ -23,6 +23,7 @@ erDiagram
     CONFECCAO ||--o{ ENTREVISTA : responde
     CATEGORIA |o--o{ ENTREVISTA : "é percebida em"
     LANCAMENTO_MENSAL ||--o{ HISTORICO_LANCAMENTO : registra
+    USUARIO |o--o{ HISTORICO_LANCAMENTO : altera
 ```
 
 ### Entidades e atributos
@@ -39,7 +40,7 @@ erDiagram
 | **Entrevista** | id_entrevista | data, resumo, achou_algo_novo (sim, não) |
 | **Relatório** | id_relatorio | tipo (REGIONAL, CATEGORIA_PERIODO, TENDENCIA, CENARIO), periodo_inicio, periodo_fim, limiar_tendencia, data_geracao |
 | **Item de relatório** | id_item | uf (opcional), quantidade, faturamento, variacao_percentual, tendencia (ALTA, QUEDA, ESTAVEL) |
-| **Histórico de lançamento** | id_log | acao (UPDATE, DELETE), quantidade_antiga, faturamento_antigo, status_antigo, data_log |
+| **Histórico de lançamento** | id_historico | acao (UPDATE, DELETE), origem (MANUAL, IMPORTACAO), mes_referencia, quantidade_antiga, faturamento_antigo, status_antigo, quantidade_nova, faturamento_novo, status_novo (os novos ficam vazios no DELETE), data_alteracao |
 
 ## Modelo lógico
 
@@ -59,7 +60,8 @@ erDiagram
     categoria            |o--o{ item_relatorio       : agrupa
     confeccao            ||--o{ entrevista           : responde
     categoria            |o--o{ entrevista           : "é percebida em"
-    lancamento_mensal    ||..o{ log_lancamento       : registra
+    lancamento_mensal    ||..o{ historico_lancamento : registra
+    usuario              |o..o{ historico_lancamento : altera
 
     cidade {
         int     id_cidade PK
@@ -141,18 +143,26 @@ erDiagram
         int     id_confeccao FK
         int     id_categoria_percebida FK "opcional"
     }
-    log_lancamento {
-        int       id_log PK
+    historico_lancamento {
+        int       id_historico PK
         int       id_lancamento "sem FK"
         varchar   acao "UPDATE | DELETE"
+        varchar   origem "MANUAL | IMPORTACAO"
+        date      mes_referencia
+        int       id_confeccao "sem FK"
+        int       id_categoria "sem FK"
         int       quantidade_antiga
         decimal   faturamento_antigo
         varchar   status_antigo
-        datetime  data_log
+        int       quantidade_nova "NULL se DELETE"
+        decimal   faturamento_novo "NULL se DELETE"
+        varchar   status_novo "NULL se DELETE"
+        int       id_usuario "sem FK, quem alterou"
+        datetime  data_alteracao
     }
 ```
 
-`log_lancamento` implementa a entidade Histórico de lançamento e é preenchida pelos triggers. A linha tracejada indica que `id_lancamento` **não é FK**: o registro do histórico precisa continuar existindo depois que o lançamento é excluído, e uma FK impediria isso.
+`historico_lancamento` implementa a entidade Histórico de lançamento e é preenchida pelos triggers. As linhas tracejadas indicam que `id_lancamento` e `id_usuario` **não são FK**: o registro do histórico precisa continuar existindo depois que o lançamento (ou o usuário) é excluído, e uma FK impediria isso. Pelo mesmo motivo a tabela guarda uma cópia de `origem`, `mes_referencia`, `id_confeccao` e `id_categoria`: depois de um DELETE, o lançamento não existe mais para consultar esses dados. Essa repetição é proposital — o histórico é um retrato do lançamento no momento da alteração, não um dado que deva acompanhar mudanças futuras.
 
 **Legenda da cardinalidade:** `||` = exatamente 1 · `|o` = 0 ou 1 · `o{` = 0 ou N · `|{` = 1 ou N
 
@@ -175,6 +185,7 @@ erDiagram
 | Confecção (0,N) | responde | Entrevista (1,1) |
 | Categoria (0,N) | é percebida em | Entrevista (0,1) |
 | Lançamento mensal (0,N) | registra | Histórico de lançamento (1,1) |
+| Usuário (0,N) | altera | Histórico de lançamento (0,1) |
 
 ### Justificativa das cardinalidades opcionais
 
@@ -228,25 +239,44 @@ A numeração segue o [minimundo](docs/minimundo.md).
 | RN08 | Tendência pela variação comparada ao limiar | Calculada ao gerar o relatório |
 | RN09 | Entrevista registra a categoria que o empresário *acha* que mais vende | `id_categoria_percebida` aceita NULL |
 | RN10 | Todo relatório tem pelo menos um item | Transação em `transacoes.sql` faz `ROLLBACK` se nenhum item for gerado |
-| RN11 | Toda alteração ou exclusão de lançamento fica no histórico | Triggers `trg_log_lancamento_update` e `trg_log_lancamento_delete` |
+| RN11 | Toda alteração ou exclusão de lançamento fica no histórico | Triggers `trg_historico_lancamento_update` e `trg_historico_lancamento_delete`; relatórios em `auditoria.sql` |
 
 ## Procedures
 
 | Procedure | Parâmetros | O que faz |
 |---|---|---|
 | `inserir_lancamento` | mês, quantidade, faturamento, confecção, categoria | Grava um lançamento MANUAL e ATIVO; qualquer dia do mês vira dia 1 |
-| `atualizar_lancamento` | id do lançamento, quantidade, faturamento | Corrige quantidade e faturamento |
-| `cancelar_lancamento` | id do lançamento | Muda o status para CANCELADO, sem apagar (RN04) |
-| `excluir_lancamento` | id do lançamento | Apaga o lançamento de vez |
+| `atualizar_lancamento` | id do lançamento, quantidade, faturamento, id do usuário | Corrige quantidade e faturamento |
+| `cancelar_lancamento` | id do lançamento, id do usuário | Muda o status para CANCELADO, sem apagar (RN04) |
+| `excluir_lancamento` | id do lançamento, id do usuário | Apaga o lançamento de vez |
+
+O id do usuário é quem está fazendo a alteração. A procedure guarda esse id em `@id_usuario` antes de mexer no lançamento, o trigger copia para o histórico, e no fim a procedure limpa a variável. Alterações feitas direto com `UPDATE` ou `DELETE`, sem passar pelas procedures, ficam no histórico como "Nao identificado".
 
 ## Triggers
 
-| Trigger | Quando dispara | O que grava em `log_lancamento` |
+| Trigger | Quando dispara | O que grava em `historico_lancamento` |
 |---|---|---|
-| `trg_log_lancamento_update` | Depois de um UPDATE em `lancamento_mensal` | Ação `UPDATE` e os valores antigos (`OLD`) de quantidade, faturamento e status |
-| `trg_log_lancamento_delete` | Depois de um DELETE em `lancamento_mensal` | Ação `DELETE` e os valores do lançamento apagado |
+| `trg_historico_lancamento_update` | Depois de um UPDATE em `lancamento_mensal` | Ação `UPDATE`, origem, mês, confecção, categoria, os valores de antes (`OLD`) e de depois (`NEW`) e o usuário de `@id_usuario` |
+| `trg_historico_lancamento_delete` | Depois de um DELETE em `lancamento_mensal` | Ação `DELETE`, os dados e valores do lançamento apagado e o usuário |
 
-Cancelar um lançamento também gera log, porque o cancelamento é um UPDATE no status.
+Cancelar um lançamento também vai para o histórico, porque o cancelamento é um UPDATE no status.
+
+## Auditoria do histórico
+
+O `auditoria.sql` traz a view e as procedures para monitorar as alterações em lançamentos (RF06). Todas as procedures recebem o período e a origem: `'MANUAL'` para acompanhar só os lançamentos digitados à mão, `'IMPORTACAO'` para os que vieram de planilha, ou `NULL` para todos.
+
+| Objeto | Parâmetros | O que mostra |
+|---|---|---|
+| `vw_historico_lancamento` (view) | — | Histórico com nomes de confecção, cidade, categoria e usuário, e a diferença de quantidade e faturamento entre antes e depois |
+| `relatorio_historico_periodo` | início, fim, origem | Todas as alterações do período, da mais recente para a mais antiga |
+| `relatorio_alteracoes_por_usuario` | início, fim, origem | Quantas correções, cancelamentos e exclusões cada usuário fez, e o impacto no faturamento |
+| `relatorio_alteracoes_por_confeccao` | início, fim, origem | Quantas alterações cada confecção teve, quantos lançamentos foram mexidos e o impacto no faturamento |
+
+O **impacto no faturamento** é quanto as alterações mudaram o faturamento que entra nos indicadores: numa correção, a diferença entre o valor novo e o antigo; num cancelamento ou exclusão, o valor antigo inteiro, negativo, porque o lançamento sai dos indicadores (RN04).
+
+```sql
+CALL relatorio_alteracoes_por_usuario('2026-10-01', '2026-10-31', 'MANUAL');
+```
 
 ## Transações
 
@@ -275,7 +305,8 @@ O RNF01 pede resposta em até 3 segundos com 10.000 vendas. Além das chaves pri
 |---|---|---|---|
 | `idx_lancamento_mes_categoria` | lancamento_mensal | mes_referencia, id_categoria, id_confeccao, lanc_status, quantidade, faturamento | Agregação de faturamento por período e categoria (RF05/RF06) |
 | `idx_lancamento_confeccao` | lancamento_mensal | id_confeccao | Filtro por confecção e, pela junção com `confeccao`, por cidade |
-| `idx_log_lancamento` | log_lancamento | id_lancamento, data_log | Histórico de um lançamento (RN11); `id_lancamento` não é FK, então não tinha índice |
+| `idx_historico_lancamento` | historico_lancamento | id_lancamento, data_alteracao | Histórico de um lançamento (RN11); `id_lancamento` não é FK, então não tinha índice |
+| `idx_historico_data` | historico_lancamento | data_alteracao, origem | Relatórios de auditoria por período e origem (`auditoria.sql`) |
 | `idx_cenario_usuario_nome` | cenario_concorrencia | id_usuario, nome | Cenários salvos do usuário, consultados por nome (RF08) |
 | `idx_relatorio_usuario_data` | relatorio | id_usuario, data_geracao | Relatórios do usuário, do mais recente ao mais antigo |
 
@@ -297,10 +328,11 @@ As agregações do `consultas.sql` (por UF, categoria e mês) também usam índi
 | [docker-compose.yml](docker-compose.yml) | MySQL 8.0 em container que carrega o `banco_completo.sql` na primeira subida |
 | [minimundo.md](docs/minimundo.md) | Minimundo: contexto, usuários, regras de negócio e requisitos |
 | [banco_completo.sql](database/banco_completo.sql) | Todos os arquivos abaixo em um único script, na ordem certa; recria o banco do zero |
-| [schema.sql](database/schema.sql) | Criação do banco, das 10 tabelas, da tabela de auditoria `log_lancamento` e dos índices do RNF01 |
+| [schema.sql](database/schema.sql) | Criação do banco, das 10 tabelas, da tabela de auditoria `historico_lancamento` e dos índices do RNF01 |
 | [inserts.sql](database/inserts.sql) | Dados de exemplo para todas as tabelas |
 | [procedures.sql](database/procedures.sql) | Procedures para inserir, atualizar, cancelar e excluir lançamentos |
-| [triggers.sql](database/triggers.sql) | Triggers que gravam o log de UPDATE e DELETE em lançamentos, com testes |
+| [triggers.sql](database/triggers.sql) | Triggers que gravam no histórico os UPDATE e DELETE de lançamentos, com testes |
+| [auditoria.sql](database/auditoria.sql) | View e procedures de relatório do histórico de lançamentos |
 | [transacoes.sql](database/transacoes.sql) | Transações de importação e de geração de relatório (`COMMIT`, `ROLLBACK`, `SAVEPOINT`) |
 | [selects.sql](database/selects.sql) | Consulta de todos os registros de cada tabela |
 | [consultas.sql](database/consultas.sql) | Consultas com `INNER JOIN`, `LEFT JOIN`, `GROUP BY`, `COUNT`, `AVG`, `MAX` e `MIN` |
@@ -355,7 +387,7 @@ Pelo **MySQL Workbench** ou DBeaver, crie uma conexão com os dados da tabela ac
 
 O `banco_completo.sql` só roda quando o volume de dados está vazio. Depois de mudar algum script SQL, use `docker compose down -v` e `docker compose up -d` para recarregar.
 
-A cada push e Pull Request, o GitHub Actions ([`.github/workflows/docker.yml`](.github/workflows/docker.yml)) roda `docker compose up -d`, espera o banco ficar `healthy` e confere que as 11 tabelas existem com dados, além da view, das 4 procedures e dos 2 triggers. O resultado aparece na aba **Actions** do repositório e como ✅ ou ❌ no commit e no Pull Request. Assim, uma mudança nos scripts que quebre a carga inicial é descoberta antes de chegar à `develop`.
+A cada push e Pull Request, o GitHub Actions ([`.github/workflows/docker.yml`](.github/workflows/docker.yml)) roda `docker compose up -d`, espera o banco ficar `healthy` e confere que as 11 tabelas existem com dados, além das 2 views, das 7 procedures e dos 2 triggers. O resultado aparece na aba **Actions** do repositório e como ✅ ou ❌ no commit e no Pull Request. Assim, uma mudança nos scripts que quebre a carga inicial é descoberta antes de chegar à `develop`.
 
 ### Com MySQL instalado
 
@@ -372,6 +404,7 @@ mysql -u root -p < database/schema.sql
 mysql -u root -p < database/inserts.sql
 mysql -u root -p < database/procedures.sql
 mysql -u root -p < database/triggers.sql
+mysql -u root -p < database/auditoria.sql
 mysql -u root -p < database/transacoes.sql
 mysql -u root -p < database/selects.sql
 mysql -u root -p < database/consultas.sql
@@ -388,7 +421,7 @@ Para recomeçar do zero, apague o banco antes com `DROP DATABASE confeccoes;`.
 Pelo **MySQL Workbench**: abra cada arquivo em *File → Open SQL Script* e execute (⚡), na mesma ordem.
 ## Banco local em SQLite (`extensao.db`)
 
-Para quem precisa de um banco local sem instalar MySQL nem Docker, o repositório traz uma versão SQLite3 do mesmo modelo: as 11 tabelas, todas as chaves primárias e estrangeiras, os `UNIQUE`, os `CHECK`, os dois triggers do histórico de lançamento e a view `vw_lancamentos`, com os mesmos dados de exemplo do `inserts.sql`.
+Para quem precisa de um banco local sem instalar MySQL nem Docker, o repositório traz uma versão SQLite3 do mesmo modelo: as 11 tabelas, todas as chaves primárias e estrangeiras, os `UNIQUE`, os `CHECK`, os dois triggers do histórico de lançamento e as views `vw_lancamentos` e `vw_historico_lancamento`, com os mesmos dados de exemplo do `inserts.sql`.
 
 O arquivo pronto é o [`database/extensao.db`](database/extensao.db). Para gerar de novo (depois de mudar o `schema_sqlite.sql` ou o `inserts.sql`), na raiz do repositório:
 
@@ -417,7 +450,8 @@ sed '/^USE /d' database/inserts.sql | sqlite3 database/extensao.db
 | `DECIMAL(12,2)` | `NUMERIC` |
 | `DATE`, `DATETIME` | `TEXT` em ISO 8601 (`AAAA-MM-DD` e `AAAA-MM-DD HH:MM:SS`), validado por `CHECK` |
 | `DAY(mes_referencia) = 1` | `strftime('%d', mes_referencia) = '01'` |
-| Procedures (`procedures.sql`) | Não existem no SQLite: inserir, atualizar, cancelar e excluir lançamentos ficam com o back-end |
+| Procedures (`procedures.sql`, `auditoria.sql`) | Não existem no SQLite: inserir, atualizar, cancelar e excluir lançamentos e os relatórios de auditoria ficam com o back-end (a view `vw_historico_lancamento` existe) |
+| `@id_usuario` no histórico | O SQLite não tem variáveis de sessão: os triggers gravam `id_usuario` vazio e o back-end preenche logo depois da alteração, na mesma transação: `UPDATE historico_lancamento SET id_usuario = ? WHERE id_historico = (SELECT MAX(id_historico) FROM historico_lancamento WHERE id_lancamento = ?)` (`last_insert_rowid()` não serve, porque não enxerga os inserts feitos pelos triggers) |
 
 `NUMERIC` guarda os valores como número de ponto flutuante quando têm casas decimais, então somas de faturamento podem ter diferenças de centavos em casas muito distantes. Para desenvolvimento local isso não atrapalha; o MySQL continua sendo o banco oficial.
 
