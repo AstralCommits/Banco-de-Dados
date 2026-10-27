@@ -9,7 +9,7 @@ Cada versão tem uma tag anotada no Git (`git tag -l -n9` lista todas).
 ## [Não lançado]
 
 ### Adicionado
-- Índices para o RNF01 (resposta em até 3 segundos com 10.000 vendas): `idx_lancamento_mes_categoria` e `idx_lancamento_confeccao` em `lancamento_mensal`, mais índices em `log_lancamento`, `cenario_concorrencia` e `relatorio`, no `schema.sql` e no `banco_completo.sql`.
+- Índices para o RNF01 (resposta em até 3 segundos com 10.000 vendas): `idx_lancamento_mes_categoria` e `idx_lancamento_confeccao` em `lancamento_mensal`, mais índices em `historico_lancamento`, `cenario_concorrencia` e `relatorio`, no `schema.sql` e no `banco_completo.sql`.
 - `teste_desempenho.sql`, que gera 10.000 vendas, mede as consultas do painel, mostra o `EXPLAIN` das agregações por período e desfaz os dados no final.
 - `docker-compose.yml` com MySQL 8.0 que carrega o `banco_completo.sql` automaticamente na primeira subida, com healthcheck e credenciais de desenvolvimento (`trama`/`trama`).
 - Instruções de uso com `docker compose up -d` no README.
@@ -17,6 +17,12 @@ Cada versão tem uma tag anotada no Git (`git tag -l -n9` lista todas).
 - `schema_sqlite.sql`, versão SQLite3 do schema com as 11 tabelas, chaves, `CHECK`, triggers e view.
 - `gerar_sqlite.py`, que gera o banco local `extensao.db` com os dados do `inserts.sql` e confere as chaves estrangeiras.
 - Instruções no README para o back-end usar o banco SQLite local.
+- Auditoria do histórico de lançamentos (#25): view `vw_historico_lancamento` e procedures `relatorio_historico_periodo`, `relatorio_alteracoes_por_usuario` e `relatorio_alteracoes_por_confeccao` em `auditoria.sql`, com filtro por origem (MANUAL ou IMPORTACAO).
+- O histórico passa a guardar quem fez a alteração, a origem, o mês, a confecção, a categoria e os valores novos, além dos antigos.
+
+### Alterado
+- **Incompatível:** a tabela `log_lancamento` passa a se chamar `historico_lancamento` (`id_log` → `id_historico`, `data_log` → `data_alteracao`), e os triggers passam a se chamar `trg_historico_lancamento_update` e `trg_historico_lancamento_delete`.
+- **Incompatível:** `atualizar_lancamento`, `cancelar_lancamento` e `excluir_lancamento` recebem o id do usuário como último parâmetro.
 
 ## [0.3.1] - 2026-10-27
 
