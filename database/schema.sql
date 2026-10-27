@@ -138,6 +138,20 @@ CREATE TABLE log_lancamento (
     CONSTRAINT chk_log_acao CHECK (acao IN ('UPDATE','DELETE'))
 );
  
+-- Indices do RNF01: resposta em ate 3 segundos com 10.000 vendas
+-- Agregacao por periodo e categoria (RF05/RF06). As colunas depois de id_categoria fazem o
+-- indice cobrir a consulta: o MySQL soma direto do indice, sem full table scan.
+CREATE INDEX idx_lancamento_mes_categoria ON lancamento_mensal
+    (mes_referencia, id_categoria, id_confeccao, lanc_status, quantidade, faturamento);
+-- Filtro por confeccao e, pela juncao com confeccao, por cidade
+CREATE INDEX idx_lancamento_confeccao ON lancamento_mensal (id_confeccao);
+-- Historico de um lancamento (RN11); id_lancamento nao e FK, entao nao tinha indice
+CREATE INDEX idx_log_lancamento ON log_lancamento (id_lancamento, data_log);
+-- Cenarios salvos do usuario, consultados por nome (RF08)
+CREATE INDEX idx_cenario_usuario_nome ON cenario_concorrencia (id_usuario, nome);
+-- Relatorios do usuario, do mais recente ao mais antigo
+CREATE INDEX idx_relatorio_usuario_data ON relatorio (id_usuario, data_geracao);
+
 CREATE OR REPLACE VIEW vw_lancamentos AS
 SELECT l.id_lancamento,
        l.mes_referencia,
