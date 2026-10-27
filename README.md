@@ -294,6 +294,7 @@ As agregações do `consultas.sql` (por UF, categoria e mês) também usam índi
 
 | Arquivo | Conteúdo |
 |---|---|
+| [docker-compose.yml](docker-compose.yml) | MySQL 8.0 em container que carrega o `banco_completo.sql` na primeira subida |
 | [minimundo.md](docs/minimundo.md) | Minimundo: contexto, usuários, regras de negócio e requisitos |
 | [banco_completo.sql](database/banco_completo.sql) | Todos os arquivos abaixo em um único script, na ordem certa; recria o banco do zero |
 | [schema.sql](database/schema.sql) | Criação do banco, das 10 tabelas, da tabela de auditoria `log_lancamento` e dos índices do RNF01 |
@@ -306,6 +307,54 @@ As agregações do `consultas.sql` (por UF, categoria e mês) também usam índi
 | [teste_desempenho.sql](database/teste_desempenho.sql) | Teste do RNF01 com 10.000 vendas; não fica no `banco_completo.sql` e não altera os dados |
 
 ## Como executar
+
+### Com Docker (recomendado para o back-end e o front-end)
+
+Precisa só do [Docker Desktop](https://www.docker.com/products/docker-desktop/) instalado e aberto. Na pasta do repositório:
+
+```bash
+docker compose up -d
+```
+
+Na primeira vez, o Docker baixa a imagem `mysql:8.0` e roda o `database/banco_completo.sql` automaticamente: cria as tabelas, procedures, triggers, índices e os dados de exemplo. Leva por volta de um minuto. Para saber se terminou:
+
+```bash
+docker compose ps
+```
+
+Quando a coluna `STATUS` mostrar `healthy`, o banco está pronto. O healthcheck só fica `healthy` depois que a carga inicial terminou e a tabela `lancamento_mensal` responde.
+
+| Configuração | Valor |
+|---|---|
+| Host | `localhost` |
+| Porta | `3307` |
+| Banco | `confeccoes` |
+| Usuário / senha | `trama` / `trama` |
+| Usuário root / senha | `root` / `root` |
+| URL JDBC (Spring Boot) | `jdbc:mysql://localhost:3307/confeccoes` |
+
+A porta é `3307`, e não `3306`, para não dar conflito com um MySQL já instalado no computador. Para usar outra porta, defina `MYSQL_PORT` antes de subir (no Git Bash: `MYSQL_PORT=3306 docker compose up -d`). Essas credenciais são só para desenvolvimento.
+
+Para conferir as tabelas e os dados pelo terminal:
+
+```bash
+docker compose exec mysql mysql -utrama -ptrama confeccoes -e "SHOW TABLES; SELECT COUNT(*) FROM lancamento_mensal;"
+```
+
+Pelo **MySQL Workbench** ou DBeaver, crie uma conexão com os dados da tabela acima.
+
+| Comando | O que faz |
+|---|---|
+| `docker compose stop` | Para o banco e mantém os dados |
+| `docker compose start` | Sobe de novo com os dados que já estavam lá |
+| `docker compose logs -f mysql` | Mostra o log do MySQL (útil se o status não ficar `healthy`) |
+| `docker compose down -v` | Apaga o container **e os dados**; o próximo `up -d` recarrega o `banco_completo.sql` do zero |
+
+O `banco_completo.sql` só roda quando o volume de dados está vazio. Depois de mudar algum script SQL, use `docker compose down -v` e `docker compose up -d` para recarregar.
+
+A cada push e Pull Request, o GitHub Actions ([`.github/workflows/docker.yml`](.github/workflows/docker.yml)) roda `docker compose up -d`, espera o banco ficar `healthy` e confere que as 11 tabelas existem com dados, além da view, das 4 procedures e dos 2 triggers. O resultado aparece na aba **Actions** do repositório e como ✅ ou ❌ no commit e no Pull Request. Assim, uma mudança nos scripts que quebre a carga inicial é descoberta antes de chegar à `develop`.
+
+### Com MySQL instalado
 
 O jeito mais simples é rodar o script completo, que apaga e recria o banco `confeccoes` com tudo:
 

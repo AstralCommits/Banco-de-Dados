@@ -11,6 +11,9 @@ Cada versão tem uma tag anotada no Git (`git tag -l -n9` lista todas).
 ### Adicionado
 - Índices para o RNF01 (resposta em até 3 segundos com 10.000 vendas): `idx_lancamento_mes_categoria` e `idx_lancamento_confeccao` em `lancamento_mensal`, mais índices em `log_lancamento`, `cenario_concorrencia` e `relatorio`, no `schema.sql` e no `banco_completo.sql`.
 - `teste_desempenho.sql`, que gera 10.000 vendas, mede as consultas do painel, mostra o `EXPLAIN` das agregações por período e desfaz os dados no final.
+- `docker-compose.yml` com MySQL 8.0 que carrega o `banco_completo.sql` automaticamente na primeira subida, com healthcheck e credenciais de desenvolvimento (`trama`/`trama`).
+- Instruções de uso com `docker compose up -d` no README.
+- Workflow do GitHub Actions que sobe o `docker compose` e confere tabelas, dados, view, procedures e triggers a cada push e Pull Request.
 
 ## [0.3.1] - 2026-10-27
 
