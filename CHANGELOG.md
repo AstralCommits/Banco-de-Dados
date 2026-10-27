@@ -8,6 +8,11 @@ Cada versão tem uma tag anotada no Git (`git tag -l -n9` lista todas).
 
 ## [Não lançado]
 
+### Adicionado
+- `schema_sqlite.sql`, versão SQLite3 do schema com as 11 tabelas, chaves, `CHECK`, triggers e view.
+- `gerar_sqlite.py`, que gera o banco local `extensao.db` com os dados do `inserts.sql` e confere as chaves estrangeiras.
+- Instruções no README para o back-end usar o banco SQLite local.
+
 ## [0.3.1] - 2026-10-27
 
 ### Alterado
