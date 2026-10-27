@@ -127,15 +127,27 @@ CREATE TABLE entrevista (
     CONSTRAINT chk_entrevista_novo CHECK (achou_algo_novo IN ('SIM','NAO'))
 );
  
-CREATE TABLE log_lancamento (
-    id_log INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+-- Historico (auditoria) de lancamentos, preenchido pelos triggers (RN11).
+-- Guarda uma copia dos dados do lancamento, sem FKs: o registro continua valendo
+-- mesmo depois que o lancamento, a confeccao ou o usuario deixam de existir.
+CREATE TABLE historico_lancamento (
+    id_historico INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     id_lancamento INT NOT NULL,
     acao VARCHAR(10) NOT NULL, -- UPDATE ou DELETE
+    origem VARCHAR(10) NOT NULL, -- MANUAL ou IMPORTACAO, do lancamento alterado
+    mes_referencia DATE NOT NULL,
+    id_confeccao INT NOT NULL,
+    id_categoria INT NOT NULL,
     quantidade_antiga INT NOT NULL,
     faturamento_antigo DECIMAL(12,2) NOT NULL,
     status_antigo VARCHAR(10) NOT NULL,
-    data_log DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT chk_log_acao CHECK (acao IN ('UPDATE','DELETE'))
+    quantidade_nova INT NULL, -- NULL quando a acao e DELETE
+    faturamento_novo DECIMAL(12,2) NULL,
+    status_novo VARCHAR(10) NULL,
+    id_usuario INT NULL, -- quem alterou: vem de @id_usuario, definido pelas procedures
+    data_alteracao DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT chk_hist_acao   CHECK (acao IN ('UPDATE','DELETE')),
+    CONSTRAINT chk_hist_origem CHECK (origem IN ('MANUAL','IMPORTACAO'))
 );
  
 -- Indices do RNF01: resposta em ate 3 segundos com 10.000 vendas
@@ -146,7 +158,9 @@ CREATE INDEX idx_lancamento_mes_categoria ON lancamento_mensal
 -- Filtro por confeccao e, pela juncao com confeccao, por cidade
 CREATE INDEX idx_lancamento_confeccao ON lancamento_mensal (id_confeccao);
 -- Historico de um lancamento (RN11); id_lancamento nao e FK, entao nao tinha indice
-CREATE INDEX idx_log_lancamento ON log_lancamento (id_lancamento, data_log);
+CREATE INDEX idx_historico_lancamento ON historico_lancamento (id_lancamento, data_alteracao);
+-- Relatorios de auditoria por periodo, filtrando a origem (auditoria.sql)
+CREATE INDEX idx_historico_data ON historico_lancamento (data_alteracao, origem);
 -- Cenarios salvos do usuario, consultados por nome (RF08)
 CREATE INDEX idx_cenario_usuario_nome ON cenario_concorrencia (id_usuario, nome);
 -- Relatorios do usuario, do mais recente ao mais antigo

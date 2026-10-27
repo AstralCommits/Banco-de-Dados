@@ -5,13 +5,16 @@
 --   DECIMAL(p,s)         -> NUMERIC
 --   DATE / DATETIME      -> TEXT no formato ISO 8601 ('AAAA-MM-DD' e 'AAAA-MM-DD HH:MM:SS'), validado por CHECK
 --   DAY(data) = 1        -> strftime('%d', data) = '01'
--- O SQLite nao tem procedures: inserir, atualizar, cancelar e excluir lancamentos ficam com o back-end.
+-- O SQLite nao tem procedures: inserir, atualizar, cancelar e excluir lancamentos ficam com o back-end,
+-- assim como os relatorios de auditoria do auditoria.sql (a view vw_historico_lancamento existe aqui).
+-- Tambem nao tem variaveis de sessao: os triggers gravam id_usuario NULL e o back-end preenche depois.
 -- As chaves estrangeiras so valem com PRAGMA foreign_keys = ON, que precisa ser ligado em cada conexao.
 
 PRAGMA foreign_keys = ON;
 
+DROP VIEW IF EXISTS vw_historico_lancamento;
 DROP VIEW IF EXISTS vw_lancamentos;
-DROP TABLE IF EXISTS log_lancamento;
+DROP TABLE IF EXISTS historico_lancamento;
 DROP TABLE IF EXISTS entrevista;
 DROP TABLE IF EXISTS item_relatorio;
 DROP TABLE IF EXISTS relatorio;
@@ -155,36 +158,55 @@ CREATE TABLE entrevista (
     CONSTRAINT chk_entrevista_novo CHECK (achou_algo_novo IN ('SIM','NAO'))
 );
 
-CREATE TABLE log_lancamento (
-    id_log INTEGER PRIMARY KEY AUTOINCREMENT,
+-- Historico (auditoria) de lancamentos, preenchido pelos triggers (RN11). Sem FKs, como no MySQL.
+CREATE TABLE historico_lancamento (
+    id_historico INTEGER PRIMARY KEY AUTOINCREMENT,
     id_lancamento INTEGER NOT NULL,
     acao TEXT NOT NULL, -- UPDATE ou DELETE
+    origem TEXT NOT NULL, -- MANUAL ou IMPORTACAO, do lancamento alterado
+    mes_referencia TEXT NOT NULL,
+    id_confeccao INTEGER NOT NULL,
+    id_categoria INTEGER NOT NULL,
     quantidade_antiga INTEGER NOT NULL,
     faturamento_antigo NUMERIC NOT NULL,
     status_antigo TEXT NOT NULL,
-    data_log TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT chk_log_acao CHECK (acao IN ('UPDATE','DELETE'))
+    quantidade_nova INTEGER NULL, -- NULL quando a acao e DELETE
+    faturamento_novo NUMERIC NULL,
+    status_novo TEXT NULL,
+    id_usuario INTEGER NULL, -- quem alterou; no SQLite o back-end preenche
+    data_alteracao TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT chk_hist_acao   CHECK (acao IN ('UPDATE','DELETE')),
+    CONSTRAINT chk_hist_origem CHECK (origem IN ('MANUAL','IMPORTACAO'))
 );
 
+CREATE INDEX idx_historico_lancamento ON historico_lancamento (id_lancamento, data_alteracao);
+CREATE INDEX idx_historico_data ON historico_lancamento (data_alteracao, origem);
+
 -- Historico de lancamento (RN11): mesmos triggers do triggers.sql
-CREATE TRIGGER trg_log_lancamento_update
+CREATE TRIGGER trg_historico_lancamento_update
 AFTER UPDATE ON lancamento_mensal
 FOR EACH ROW
 BEGIN
-    INSERT INTO log_lancamento
-    (id_lancamento, acao, quantidade_antiga, faturamento_antigo, status_antigo)
+    INSERT INTO historico_lancamento
+    (id_lancamento, acao, origem, mes_referencia, id_confeccao, id_categoria,
+     quantidade_antiga, faturamento_antigo, status_antigo,
+     quantidade_nova, faturamento_novo, status_novo)
     VALUES
-    (OLD.id_lancamento, 'UPDATE', OLD.quantidade, OLD.faturamento, OLD.lanc_status);
+    (OLD.id_lancamento, 'UPDATE', OLD.origem, OLD.mes_referencia, OLD.id_confeccao, OLD.id_categoria,
+     OLD.quantidade, OLD.faturamento, OLD.lanc_status,
+     NEW.quantidade, NEW.faturamento, NEW.lanc_status);
 END;
 
-CREATE TRIGGER trg_log_lancamento_delete
+CREATE TRIGGER trg_historico_lancamento_delete
 AFTER DELETE ON lancamento_mensal
 FOR EACH ROW
 BEGIN
-    INSERT INTO log_lancamento
-    (id_lancamento, acao, quantidade_antiga, faturamento_antigo, status_antigo)
+    INSERT INTO historico_lancamento
+    (id_lancamento, acao, origem, mes_referencia, id_confeccao, id_categoria,
+     quantidade_antiga, faturamento_antigo, status_antigo)
     VALUES
-    (OLD.id_lancamento, 'DELETE', OLD.quantidade, OLD.faturamento, OLD.lanc_status);
+    (OLD.id_lancamento, 'DELETE', OLD.origem, OLD.mes_referencia, OLD.id_confeccao, OLD.id_categoria,
+     OLD.quantidade, OLD.faturamento, OLD.lanc_status);
 END;
 
 CREATE VIEW vw_lancamentos AS
@@ -205,3 +227,33 @@ INNER JOIN confeccao c   ON l.id_confeccao = c.id_confeccao
 INNER JOIN categoria cat ON l.id_categoria = cat.id_categoria
 INNER JOIN cidade ci     ON c.id_cidade = ci.id_cidade
 WHERE l.lanc_status = 'ATIVO';
+
+-- Mesma view do auditoria.sql
+CREATE VIEW vw_historico_lancamento AS
+SELECT h.id_historico,
+       h.data_alteracao,
+       h.acao,
+       h.origem,
+       h.id_lancamento,
+       h.mes_referencia,
+       h.id_confeccao,
+       c.nome AS confeccao,
+       ci.nome AS cidade,
+       ci.uf,
+       h.id_categoria,
+       cat.nome AS categoria,
+       h.quantidade_antiga,
+       h.quantidade_nova,
+       h.quantidade_nova - h.quantidade_antiga AS diferenca_quantidade,
+       h.faturamento_antigo,
+       h.faturamento_novo,
+       h.faturamento_novo - h.faturamento_antigo AS diferenca_faturamento,
+       h.status_antigo,
+       h.status_novo,
+       h.id_usuario,
+       COALESCE(u.nome, 'Nao identificado') AS usuario
+FROM historico_lancamento h
+LEFT JOIN confeccao c   ON h.id_confeccao = c.id_confeccao
+LEFT JOIN cidade ci     ON c.id_cidade = ci.id_cidade
+LEFT JOIN categoria cat ON h.id_categoria = cat.id_categoria
+LEFT JOIN usuario u     ON h.id_usuario = u.id_usuario;
