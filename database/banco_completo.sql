@@ -14,9 +14,11 @@ CREATE TABLE confeccao (
     nome VARCHAR(120) NOT NULL,
     cnpj VARCHAR(14) NULL UNIQUE,
     porte VARCHAR(10) NOT NULL, -- MICRO, PEQUENA ou MEDIA
-    tipo VARCHAR(10) NOT NULL, -- CONFECCAO ou FACCAO
+    tipo VARCHAR(10) NOT NULL,  -- CONFECCAO ou FACCAO
     id_cidade INT NOT NULL,
-    FOREIGN KEY (id_cidade) REFERENCES cidade (id_cidade)
+    FOREIGN KEY (id_cidade) REFERENCES cidade (id_cidade),
+    CONSTRAINT chk_confeccao_porte CHECK (porte IN ('MICRO','PEQUENA','MEDIA')),
+    CONSTRAINT chk_confeccao_tipo  CHECK (tipo IN ('CONFECCAO','FACCAO'))
 );
 
 CREATE TABLE usuario (
@@ -26,7 +28,13 @@ CREATE TABLE usuario (
     senha_hash VARCHAR(255) NOT NULL,
     perfil VARCHAR(10) NOT NULL, -- ADMIN ou CONFECCAO
     id_confeccao INT NULL,
-    FOREIGN KEY (id_confeccao) REFERENCES confeccao (id_confeccao)
+    FOREIGN KEY (id_confeccao) REFERENCES confeccao (id_confeccao),
+    CONSTRAINT chk_usuario_perfil CHECK (perfil IN ('ADMIN','CONFECCAO')),
+    -- ADMIN nao pertence a confeccao; usuario CONFECCAO precisa pertencer a uma
+    CONSTRAINT chk_usuario_perfil_confeccao CHECK (
+        (perfil = 'ADMIN' AND id_confeccao IS NULL)
+        OR (perfil = 'CONFECCAO' AND id_confeccao IS NOT NULL)
+    )
 );
 
 CREATE TABLE categoria (
@@ -39,14 +47,15 @@ CREATE TABLE importacao (
     nome_arquivo VARCHAR(150) NOT NULL,
     data_importacao DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     qtd_linhas INT NULL,
-    imp_status VARCHAR(100) NOT NULL, -- CONCLUIDA ou ERRO
+    imp_status VARCHAR(10) NOT NULL, -- CONCLUIDA ou ERRO
     id_usuario INT NOT NULL,
-    FOREIGN KEY (id_usuario) REFERENCES usuario (id_usuario)
+    FOREIGN KEY (id_usuario) REFERENCES usuario (id_usuario),
+    CONSTRAINT chk_imp_status CHECK (imp_status IN ('CONCLUIDA','ERRO'))
 );
 
 CREATE TABLE lancamento_mensal (
     id_lancamento INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
-    mes_referencia DATE NOT NULL, -- sempre o dia 1 do mês
+    mes_referencia DATE NOT NULL, -- sempre o dia 1 do mes
     quantidade INT NOT NULL,
     faturamento DECIMAL(12,2) NOT NULL,
     origem VARCHAR(10) NOT NULL, -- MANUAL ou IMPORTACAO
@@ -54,10 +63,16 @@ CREATE TABLE lancamento_mensal (
     id_confeccao INT NOT NULL,
     id_categoria INT NOT NULL,
     id_importacao INT NULL,
+    
     UNIQUE (id_confeccao, id_categoria, mes_referencia),
     FOREIGN KEY (id_confeccao) REFERENCES confeccao (id_confeccao),
     FOREIGN KEY (id_categoria) REFERENCES categoria (id_categoria),
-    FOREIGN KEY (id_importacao) REFERENCES importacao (id_importacao)
+    FOREIGN KEY (id_importacao) REFERENCES importacao (id_importacao),
+    CONSTRAINT chk_lanc_dia1      CHECK (DAY(mes_referencia) = 1),
+    CONSTRAINT chk_lanc_origem    CHECK (origem IN ('MANUAL','IMPORTACAO')),
+    CONSTRAINT chk_lanc_status    CHECK (lanc_status IN ('ATIVO','CANCELADO')),
+    CONSTRAINT chk_lanc_quant     CHECK (quantidade >= 0),
+    CONSTRAINT chk_lanc_fatur     CHECK (faturamento >= 0)
 );
 
 CREATE TABLE cenario_concorrencia (
@@ -81,7 +96,9 @@ CREATE TABLE relatorio (
     id_usuario INT NOT NULL,
     id_cenario INT NULL,
     FOREIGN KEY (id_usuario) REFERENCES usuario (id_usuario),
-    FOREIGN KEY (id_cenario) REFERENCES cenario_concorrencia (id_cenario)
+    FOREIGN KEY (id_cenario) REFERENCES cenario_concorrencia (id_cenario),
+    CONSTRAINT chk_relatorio_tipo CHECK (tipo IN ('REGIONAL','CATEGORIA_PERIODO','TENDENCIA','CENARIO')),
+    CONSTRAINT chk_relatorio_periodo CHECK (periodo_fim >= periodo_inicio)
 );
 
 CREATE TABLE item_relatorio (
@@ -94,7 +111,9 @@ CREATE TABLE item_relatorio (
     id_relatorio INT NOT NULL,
     id_categoria INT NULL,
     FOREIGN KEY (id_relatorio) REFERENCES relatorio (id_relatorio),
-    FOREIGN KEY (id_categoria) REFERENCES categoria (id_categoria)
+    FOREIGN KEY (id_categoria) REFERENCES categoria (id_categoria),
+    CONSTRAINT chk_item_uf CHECK (uf IS NULL OR uf IN ('PE','PB','AL')),
+    CONSTRAINT chk_item_tendencia CHECK (tendencia IS NULL OR tendencia IN ('ALTA','QUEDA','ESTAVEL'))
 );
 
 CREATE TABLE entrevista (
@@ -105,11 +124,10 @@ CREATE TABLE entrevista (
     id_confeccao INT NOT NULL,
     id_categoria_percebida INT NULL,
     FOREIGN KEY (id_confeccao) REFERENCES confeccao (id_confeccao),
-    FOREIGN KEY (id_categoria_percebida) REFERENCES categoria (id_categoria)
+    FOREIGN KEY (id_categoria_percebida) REFERENCES categoria (id_categoria),
+    CONSTRAINT chk_entrevista_novo CHECK (achou_algo_novo IN ('SIM','NAO'))
 );
 
--- Auditoria: preenchida pelos triggers de triggers.sql.
--- Sem FK em id_lancamento, porque o log precisa sobreviver à exclusão do lançamento.
 CREATE TABLE log_lancamento (
     id_log INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     id_lancamento INT NOT NULL,
@@ -117,7 +135,8 @@ CREATE TABLE log_lancamento (
     quantidade_antiga INT NOT NULL,
     faturamento_antigo DECIMAL(12,2) NOT NULL,
     status_antigo VARCHAR(10) NOT NULL,
-    data_log DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    data_log DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT chk_log_acao CHECK (acao IN ('UPDATE','DELETE'))
 );
 
 INSERT INTO cidade (id_cidade, nome, uf) VALUES
@@ -152,10 +171,10 @@ INSERT INTO categoria (id_categoria, nome) VALUES
 
 INSERT INTO importacao
 (id_importacao, nome_arquivo, data_importacao, qtd_linhas, imp_status, id_usuario) VALUES
-(1, 'vendas_janeiro.csv', '2026-02-01 09:15:00', 120, 'CONCLUIDA', 2),
-(2, 'vendas_fevereiro.csv', '2026-03-01 10:20:00', 135, 'CONCLUIDA', 3),
-(3, 'vendas_marco.csv', '2026-04-01 14:30:00', 98, 'CONCLUIDA', 4),
-(4, 'vendas_abril.csv', '2026-05-01 08:45:00', 150, 'CONCLUIDA', 5);
+(1, 'vendas_jan_fev_modarecife.csv',       '2026-03-01 09:15:00', 2, 'CONCLUIDA', 2),
+(2, 'vendas_jan_fev_estiloagreste.csv',    '2026-03-01 10:20:00', 2, 'CONCLUIDA', 3),
+(3, 'vendas_janeiro_costuranordeste.csv',  '2026-02-01 14:30:00', 1, 'CONCLUIDA', 4),
+(4, 'vendas_janeiro_paraibafashion.csv',   '2026-02-01 08:45:00', 1, 'CONCLUIDA', 5);
 
 INSERT INTO lancamento_mensal
 (id_lancamento, mes_referencia, quantidade, faturamento, origem, lanc_status,
@@ -255,6 +274,25 @@ INSERT INTO entrevista
  'Nao foram identificadas novas tendencias relevantes.',
  'NAO', 3, NULL);
 
+CREATE OR REPLACE VIEW vw_lancamentos AS
+SELECT l.id_lancamento,
+       l.mes_referencia,
+       l.quantidade,
+       l.faturamento,
+       l.origem,
+       l.lanc_status,
+       c.id_confeccao,
+       c.nome AS confeccao,
+       cat.id_categoria,
+       cat.nome AS categoria,
+       ci.nome AS cidade,
+       ci.uf
+FROM lancamento_mensal l
+INNER JOIN confeccao c   ON l.id_confeccao = c.id_confeccao
+INNER JOIN categoria cat ON l.id_categoria = cat.id_categoria
+INNER JOIN cidade ci     ON c.id_cidade = ci.id_cidade
+WHERE l.lanc_status = 'ATIVO';
+
 DROP PROCEDURE IF EXISTS inserir_lancamento;
 DROP PROCEDURE IF EXISTS atualizar_lancamento;
 DROP PROCEDURE IF EXISTS cancelar_lancamento;
@@ -285,6 +323,13 @@ CREATE PROCEDURE atualizar_lancamento(
     IN p_faturamento DECIMAL(12,2)
 )
 BEGIN
+    -- Nao permite alterar lancamentos ja cancelados
+    IF (SELECT lanc_status FROM lancamento_mensal
+        WHERE id_lancamento = p_id_lancamento) = 'CANCELADO' THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Lancamento cancelado nao pode ser atualizado.';
+    END IF;
+
     UPDATE lancamento_mensal
     SET quantidade = p_quantidade,
         faturamento = p_faturamento
@@ -367,7 +412,7 @@ SELECT * FROM lancamento_mensal WHERE id_importacao = @id_importacao;
 START TRANSACTION;
 
 INSERT INTO importacao (nome_arquivo, qtd_linhas, imp_status, id_usuario)
-VALUES ('vendas_marco_estiloagreste.csv', 2, 'CONCLUIDA', 3);
+VALUES ('vendas_marco_estiloagreste.csv', 1, 'CONCLUIDA', 3);
 SET @id_importacao = LAST_INSERT_ID();
 
 INSERT INTO lancamento_mensal
@@ -378,7 +423,7 @@ INSERT INTO lancamento_mensal
 ROLLBACK;
 
 INSERT INTO importacao (nome_arquivo, qtd_linhas, imp_status, id_usuario)
-VALUES ('vendas_marco_estiloagreste.csv', 2, 'ERRO', 3);
+VALUES ('vendas_marco_estiloagreste.csv', NULL, 'ERRO', 3);
 
 SELECT * FROM importacao;
 SELECT * FROM lancamento_mensal WHERE id_confeccao = 2 AND mes_referencia = '2026-03-01';
@@ -400,6 +445,7 @@ INSERT INTO item_relatorio (uf, quantidade, faturamento, id_relatorio)
 VALUES ('PB', 650, 45500.00, @id_relatorio);
 
 SAVEPOINT item_pb;
+
 INSERT INTO item_relatorio (uf, quantidade, faturamento, id_relatorio)
 VALUES ('AL', 810, 5670.00, @id_relatorio);
 
@@ -411,7 +457,9 @@ VALUES ('AL', 810, 56700.00, @id_relatorio);
 COMMIT;
 
 SELECT * FROM item_relatorio WHERE id_relatorio = @id_relatorio;
+
 START TRANSACTION;
+
 INSERT INTO relatorio (tipo, periodo_inicio, periodo_fim, limiar_tendencia, id_usuario)
 VALUES ('TENDENCIA', '2025-01-01', '2025-03-31', 5.00, 2);
 
@@ -430,107 +478,127 @@ SELECT * FROM item_relatorio;
 SELECT * FROM entrevista;
 
 SELECT
-    confeccao.nome AS confeccao,
-    confeccao.porte,
-    cidade.nome AS cidade,
-    cidade.uf
-FROM confeccao
-INNER JOIN cidade
-    ON confeccao.id_cidade = cidade.id_cidade;
+    (SELECT COUNT(*) FROM cidade)            AS total_cidades,
+    (SELECT COUNT(*) FROM confeccao)         AS total_confeccoes,
+    (SELECT COUNT(*) FROM usuario)           AS total_usuarios,
+    (SELECT COUNT(*) FROM categoria)         AS total_categorias,
+    (SELECT COUNT(*) FROM lancamento_mensal) AS total_lancamentos,
+    (SELECT COUNT(*) FROM entrevista)        AS total_entrevistas;
 
 SELECT
-    lancamento_mensal.mes_referencia,
-    confeccao.nome AS confeccao,
-    categoria.nome AS categoria,
-    lancamento_mensal.quantidade,
-    lancamento_mensal.faturamento,
-    lancamento_mensal.origem
-FROM lancamento_mensal
-INNER JOIN confeccao
-    ON lancamento_mensal.id_confeccao = confeccao.id_confeccao
-INNER JOIN categoria
-    ON lancamento_mensal.id_categoria = categoria.id_categoria
-WHERE lancamento_mensal.lanc_status = 'ATIVO'
-ORDER BY lancamento_mensal.mes_referencia, confeccao.nome;
-
-SELECT
-    cidade.uf,
-    COUNT(lancamento_mensal.id_lancamento) AS total_lancamentos
-FROM lancamento_mensal
-INNER JOIN confeccao
-    ON lancamento_mensal.id_confeccao = confeccao.id_confeccao
-INNER JOIN cidade
-    ON confeccao.id_cidade = cidade.id_cidade
-WHERE lancamento_mensal.lanc_status = 'ATIVO'
-GROUP BY cidade.uf;
-
-SELECT
-    categoria.nome AS categoria,
-    ROUND(AVG(lancamento_mensal.faturamento), 2) AS media_faturamento
-FROM lancamento_mensal
-INNER JOIN categoria
-    ON lancamento_mensal.id_categoria = categoria.id_categoria
-WHERE lancamento_mensal.lanc_status = 'ATIVO'
-GROUP BY categoria.nome;
-
-SELECT
-    ROUND(AVG(faturamento), 2) AS media_faturamento,
+    SUM(faturamento) AS faturamento_total,
+    SUM(CASE WHEN lanc_status = 'ATIVO' THEN faturamento END) AS faturamento_ativo,
+    AVG(faturamento) AS faturamento_medio,
     MAX(faturamento) AS maior_faturamento,
-    MIN(faturamento) AS menor_faturamento
-FROM lancamento_mensal
-WHERE lanc_status = 'ATIVO';
+    MIN(faturamento) AS menor_faturamento,
+    SUM(quantidade)  AS quantidade_total,
+    AVG(quantidade)  AS quantidade_media,
+    MAX(quantidade)  AS maior_quantidade,
+    MIN(quantidade)  AS menor_quantidade
+FROM lancamento_mensal;
 
-SELECT
-    cidade.nome AS cidade,
-    cidade.uf,
-    COUNT(confeccao.id_confeccao) AS total_confeccoes
-FROM cidade
-LEFT JOIN confeccao
-    ON cidade.id_cidade = confeccao.id_cidade
-GROUP BY cidade.nome, cidade.uf;
+SELECT 'confeccao.porte' AS campo, porte AS valor, COUNT(*) AS qtd FROM confeccao GROUP BY porte
+UNION ALL
+SELECT 'confeccao.tipo', tipo, COUNT(*) FROM confeccao GROUP BY tipo
+UNION ALL
+SELECT 'importacao.status', imp_status, COUNT(*) FROM importacao GROUP BY imp_status
+UNION ALL
+SELECT 'lancamento.origem', origem, COUNT(*) FROM lancamento_mensal GROUP BY origem
+UNION ALL
+SELECT 'lancamento.status', lanc_status, COUNT(*) FROM lancamento_mensal GROUP BY lanc_status;
 
-SELECT
-    usuario.nome AS usuario,
-    usuario.perfil,
-    importacao.nome_arquivo,
-    importacao.imp_status
-FROM usuario
-LEFT JOIN importacao
-    ON usuario.id_usuario = importacao.id_usuario
-ORDER BY usuario.nome;
+SELECT 'usuario sem confeccao' AS caso, COUNT(*) AS qtd FROM usuario WHERE id_confeccao IS NULL
+UNION ALL
+SELECT 'cenario sem categoria', COUNT(*) FROM cenario_concorrencia WHERE id_categoria IS NULL
+UNION ALL
+SELECT 'relatorio sem cenario', COUNT(*) FROM relatorio WHERE id_cenario IS NULL
+UNION ALL
+SELECT 'entrevista sem categoria', COUNT(*) FROM entrevista WHERE id_categoria_percebida IS NULL
+UNION ALL
+SELECT 'lancamento sem importacao', COUNT(*) FROM lancamento_mensal WHERE id_importacao IS NULL;
 
-SELECT
-    entrevista.data,
-    confeccao.nome AS confeccao,
-    categoria.nome AS categoria_percebida,
-    entrevista.achou_algo_novo
-FROM entrevista
-INNER JOIN confeccao
-    ON entrevista.id_confeccao = confeccao.id_confeccao
-LEFT JOIN categoria
-    ON entrevista.id_categoria_percebida = categoria.id_categoria;
+SELECT * FROM cenario_concorrencia
+WHERE percentual_impacto > 10
+ORDER BY percentual_impacto DESC;
 
-SELECT
-    relatorio.id_relatorio,
-    relatorio.tipo,
-    usuario.nome AS gerado_por,
-    cenario_concorrencia.nome AS cenario,
-    COUNT(item_relatorio.id_item) AS total_itens
-FROM relatorio
-INNER JOIN usuario
-    ON relatorio.id_usuario = usuario.id_usuario
-LEFT JOIN cenario_concorrencia
-    ON relatorio.id_cenario = cenario_concorrencia.id_cenario
-LEFT JOIN item_relatorio
-    ON relatorio.id_relatorio = item_relatorio.id_relatorio
-GROUP BY relatorio.id_relatorio, relatorio.tipo, usuario.nome, cenario_concorrencia.nome;
+SELECT * FROM confeccao WHERE nome LIKE 'Moda%';
 
-SELECT
-    log_lancamento.data_log,
-    log_lancamento.acao,
-    log_lancamento.id_lancamento,
-    log_lancamento.quantidade_antiga,
-    log_lancamento.faturamento_antigo,
-    log_lancamento.status_antigo
-FROM log_lancamento
-ORDER BY log_lancamento.data_log;
+SELECT * FROM confeccao
+WHERE id_cidade IN (SELECT id_cidade FROM cidade WHERE uf = 'PE');
+
+SELECT * FROM lancamento_mensal
+WHERE mes_referencia BETWEEN '2026-01-01' AND '2026-02-01';
+
+SELECT DISTINCT uf FROM cidade ORDER BY uf;
+
+SELECT uf,
+       SUM(faturamento) AS faturamento_total,
+       SUM(quantidade)  AS quantidade_total
+FROM vw_lancamentos
+GROUP BY uf
+ORDER BY faturamento_total DESC;
+
+SELECT categoria,
+       SUM(faturamento) AS faturamento_total,
+       SUM(quantidade)  AS quantidade_total
+FROM vw_lancamentos
+GROUP BY categoria
+ORDER BY faturamento_total DESC;
+
+SELECT mes_referencia,
+       SUM(faturamento) AS faturamento_total
+FROM vw_lancamentos
+GROUP BY mes_referencia
+ORDER BY mes_referencia;
+
+SELECT confeccao,
+       SUM(faturamento) AS faturamento_total,
+       SUM(quantidade)  AS quantidade_total
+FROM vw_lancamentos
+GROUP BY id_confeccao, confeccao
+HAVING SUM(faturamento) > 50000
+ORDER BY faturamento_total DESC;
+
+SELECT * FROM vw_lancamentos
+ORDER BY uf, confeccao, mes_referencia;
+
+SELECT c.nome AS confeccao, ci.nome AS cidade, ci.uf, u.nome AS usuario, u.email
+FROM confeccao c
+INNER JOIN cidade ci ON c.id_cidade = ci.id_cidade
+LEFT JOIN usuario u  ON c.id_confeccao = u.id_confeccao;
+
+SELECT cat.nome AS categoria, l.id_lancamento, l.faturamento
+FROM categoria cat
+LEFT JOIN lancamento_mensal l ON cat.id_categoria = l.id_categoria;
+
+SELECT i.id_importacao, i.nome_arquivo, i.data_importacao, i.qtd_linhas,
+       i.imp_status, u.nome AS usuario, c.nome AS confeccao
+FROM importacao i
+INNER JOIN usuario u   ON i.id_usuario = u.id_usuario
+LEFT JOIN confeccao c  ON u.id_confeccao = c.id_confeccao;
+
+SELECT r.id_relatorio, r.tipo, r.periodo_inicio, r.periodo_fim,
+       u.nome AS usuario, cc.nome AS cenario
+FROM relatorio r
+INNER JOIN usuario u                ON r.id_usuario = u.id_usuario
+LEFT JOIN cenario_concorrencia cc   ON r.id_cenario = cc.id_cenario;
+
+SELECT e.id_entrevista, e.data, c.nome AS confeccao, ci.nome AS cidade, ci.uf,
+       cat.nome AS categoria_percebida, e.achou_algo_novo, e.resumo
+FROM entrevista e
+INNER JOIN confeccao c   ON e.id_confeccao = c.id_confeccao
+INNER JOIN cidade ci     ON c.id_cidade = ci.id_cidade
+LEFT JOIN categoria cat  ON e.id_categoria_percebida = cat.id_categoria
+ORDER BY e.data;
+
+SELECT cc.nome AS cenario, cc.percentual_impacto,
+       cat.nome AS categoria, u.nome AS usuario
+FROM cenario_concorrencia cc
+INNER JOIN usuario u    ON cc.id_usuario = u.id_usuario
+LEFT JOIN categoria cat ON cc.id_categoria = cat.id_categoria
+ORDER BY cc.percentual_impacto DESC;
+
+SELECT cat.nome AS categoria, ir.uf, ir.variacao_percentual, ir.tendencia
+FROM item_relatorio ir
+INNER JOIN categoria cat ON ir.id_categoria = cat.id_categoria
+ORDER BY ir.tendencia, ir.variacao_percentual DESC;

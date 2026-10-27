@@ -1,107 +1,73 @@
 USE confeccoes;
 
-SELECT
-    confeccao.nome AS confeccao,
-    confeccao.porte,
-    cidade.nome AS cidade,
-    cidade.uf
-FROM confeccao
-INNER JOIN cidade
-    ON confeccao.id_cidade = cidade.id_cidade;
+SELECT uf,
+       SUM(faturamento) AS faturamento_total,
+       SUM(quantidade)  AS quantidade_total
+FROM vw_lancamentos
+GROUP BY uf
+ORDER BY faturamento_total DESC;
+ 
+SELECT categoria,
+       SUM(faturamento) AS faturamento_total,
+       SUM(quantidade)  AS quantidade_total
+FROM vw_lancamentos
+GROUP BY categoria
+ORDER BY faturamento_total DESC;
+ 
+SELECT mes_referencia,
+       SUM(faturamento) AS faturamento_total
+FROM vw_lancamentos
+GROUP BY mes_referencia
+ORDER BY mes_referencia;
+ 
+SELECT confeccao,
+       SUM(faturamento) AS faturamento_total,
+       SUM(quantidade)  AS quantidade_total
+FROM vw_lancamentos
+GROUP BY id_confeccao, confeccao
+HAVING SUM(faturamento) > 50000
+ORDER BY faturamento_total DESC;
+ 
+SELECT * FROM vw_lancamentos
+ORDER BY uf, confeccao, mes_referencia;
 
-SELECT
-    lancamento_mensal.mes_referencia,
-    confeccao.nome AS confeccao,
-    categoria.nome AS categoria,
-    lancamento_mensal.quantidade,
-    lancamento_mensal.faturamento,
-    lancamento_mensal.origem
-FROM lancamento_mensal
-INNER JOIN confeccao
-    ON lancamento_mensal.id_confeccao = confeccao.id_confeccao
-INNER JOIN categoria
-    ON lancamento_mensal.id_categoria = categoria.id_categoria
-WHERE lancamento_mensal.lanc_status = 'ATIVO'
-ORDER BY lancamento_mensal.mes_referencia, confeccao.nome;
-
-SELECT
-    cidade.uf,
-    COUNT(lancamento_mensal.id_lancamento) AS total_lancamentos
-FROM lancamento_mensal
-INNER JOIN confeccao
-    ON lancamento_mensal.id_confeccao = confeccao.id_confeccao
-INNER JOIN cidade
-    ON confeccao.id_cidade = cidade.id_cidade
-WHERE lancamento_mensal.lanc_status = 'ATIVO'
-GROUP BY cidade.uf;
-
-SELECT
-    categoria.nome AS categoria,
-    ROUND(AVG(lancamento_mensal.faturamento), 2) AS media_faturamento
-FROM lancamento_mensal
-INNER JOIN categoria
-    ON lancamento_mensal.id_categoria = categoria.id_categoria
-WHERE lancamento_mensal.lanc_status = 'ATIVO'
-GROUP BY categoria.nome;
-
-SELECT
-    ROUND(AVG(faturamento), 2) AS media_faturamento,
-    MAX(faturamento) AS maior_faturamento,
-    MIN(faturamento) AS menor_faturamento
-FROM lancamento_mensal
-WHERE lanc_status = 'ATIVO';
-
-SELECT
-    cidade.nome AS cidade,
-    cidade.uf,
-    COUNT(confeccao.id_confeccao) AS total_confeccoes
-FROM cidade
-LEFT JOIN confeccao
-    ON cidade.id_cidade = confeccao.id_cidade
-GROUP BY cidade.nome, cidade.uf;
-
-SELECT
-    usuario.nome AS usuario,
-    usuario.perfil,
-    importacao.nome_arquivo,
-    importacao.imp_status
-FROM usuario
-LEFT JOIN importacao
-    ON usuario.id_usuario = importacao.id_usuario
-ORDER BY usuario.nome;
-
-SELECT
-    entrevista.data,
-    confeccao.nome AS confeccao,
-    categoria.nome AS categoria_percebida,
-    entrevista.achou_algo_novo
-FROM entrevista
-INNER JOIN confeccao
-    ON entrevista.id_confeccao = confeccao.id_confeccao
-LEFT JOIN categoria
-    ON entrevista.id_categoria_percebida = categoria.id_categoria;
-
-SELECT
-    relatorio.id_relatorio,
-    relatorio.tipo,
-    usuario.nome AS gerado_por,
-    cenario_concorrencia.nome AS cenario,
-    COUNT(item_relatorio.id_item) AS total_itens
-FROM relatorio
-INNER JOIN usuario
-    ON relatorio.id_usuario = usuario.id_usuario
-LEFT JOIN cenario_concorrencia
-    ON relatorio.id_cenario = cenario_concorrencia.id_cenario
-LEFT JOIN item_relatorio
-    ON relatorio.id_relatorio = item_relatorio.id_relatorio
-GROUP BY relatorio.id_relatorio, relatorio.tipo, usuario.nome, cenario_concorrencia.nome;
-
-SELECT
-    log_lancamento.data_log,
-    log_lancamento.acao,
-    log_lancamento.id_lancamento,
-    log_lancamento.quantidade_antiga,
-    log_lancamento.faturamento_antigo,
-    log_lancamento.status_antigo
-FROM log_lancamento
-ORDER BY log_lancamento.data_log;
+SELECT c.nome AS confeccao, ci.nome AS cidade, ci.uf, u.nome AS usuario, u.email
+FROM confeccao c
+INNER JOIN cidade ci ON c.id_cidade = ci.id_cidade
+LEFT JOIN usuario u  ON c.id_confeccao = u.id_confeccao;
+ 
+SELECT cat.nome AS categoria, l.id_lancamento, l.faturamento
+FROM categoria cat
+LEFT JOIN lancamento_mensal l ON cat.id_categoria = l.id_categoria;
+ 
+SELECT i.id_importacao, i.nome_arquivo, i.data_importacao, i.qtd_linhas,
+       i.imp_status, u.nome AS usuario, c.nome AS confeccao
+FROM importacao i
+INNER JOIN usuario u   ON i.id_usuario = u.id_usuario
+LEFT JOIN confeccao c  ON u.id_confeccao = c.id_confeccao;
+ 
+SELECT r.id_relatorio, r.tipo, r.periodo_inicio, r.periodo_fim,
+       u.nome AS usuario, cc.nome AS cenario
+FROM relatorio r
+INNER JOIN usuario u                ON r.id_usuario = u.id_usuario
+LEFT JOIN cenario_concorrencia cc   ON r.id_cenario = cc.id_cenario;
+ 
+SELECT e.id_entrevista, e.data, c.nome AS confeccao, ci.nome AS cidade, ci.uf,
+       cat.nome AS categoria_percebida, e.achou_algo_novo, e.resumo
+FROM entrevista e
+INNER JOIN confeccao c   ON e.id_confeccao = c.id_confeccao
+INNER JOIN cidade ci     ON c.id_cidade = ci.id_cidade
+LEFT JOIN categoria cat  ON e.id_categoria_percebida = cat.id_categoria
+ORDER BY e.data;
+ 
+SELECT cc.nome AS cenario, cc.percentual_impacto,
+       cat.nome AS categoria, u.nome AS usuario
+FROM cenario_concorrencia cc
+INNER JOIN usuario u    ON cc.id_usuario = u.id_usuario
+LEFT JOIN categoria cat ON cc.id_categoria = cat.id_categoria
+ORDER BY cc.percentual_impacto DESC;
+ 
+SELECT cat.nome AS categoria, ir.uf, ir.variacao_percentual, ir.tendencia
+FROM item_relatorio ir
+INNER JOIN categoria cat ON ir.id_categoria = cat.id_categoria
+ORDER BY ir.tendencia, ir.variacao_percentual DESC;
