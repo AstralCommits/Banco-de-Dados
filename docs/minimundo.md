@@ -2,9 +2,9 @@
 
 ## 1. Contexto
 
-A TRAMA é um sistema para acompanhar as vendas das confecções e facções do Nordeste, com foco no polo de confecções de Pernambuco, Paraíba e Alagoas. Hoje cada empresa controla as próprias vendas em cadernos ou planilhas soltas, e ninguém tem uma visão da região como um todo.
+A TRAMA é um sistema para acompanhar as vendas das confecções e facções do Polo Têxtil do Agreste pernambucano, nas cidades de Toritama, Caruaru e Santa Cruz do Capibaribe. Hoje cada empresa controla as próprias vendas em cadernos ou planilhas soltas, e ninguém tem uma visão da região como um todo.
 
-O sistema reúne, todo mês, quanto cada confecção vendeu em cada categoria de produto. A partir desses dados, ele gera relatórios por estado, por categoria e por período, aponta tendências de alta ou queda e permite simular o efeito da concorrência nas vendas. Além dos números, a rede faz entrevistas com os empresários para comparar o que eles percebem do mercado com o que os dados mostram.
+O sistema reúne, todo mês, quanto cada confecção vendeu em cada categoria de produto. A partir desses dados, ele gera relatórios por cidade, por categoria e por período, aponta tendências de alta ou queda e permite simular o efeito da concorrência nas vendas. Além dos números, a rede faz entrevistas com os empresários para comparar o que eles percebem do mercado com o que os dados mostram.
 
 ## 2. Usuários
 
@@ -19,7 +19,7 @@ Todo usuário tem nome, e-mail (único no sistema) e senha, que é guardada crip
 
 ### Cidades e confecções
 
-Cada **confecção** fica em uma única **cidade**, e cada cidade pertence a um estado (UF). Uma cidade pode ter várias confecções.
+Cada **confecção** fica em uma única **cidade**, e uma cidade pode ter várias confecções. O sistema atende só as três cidades do polo, todas em Pernambuco: **Toritama**, **Caruaru** e **Santa Cruz do Capibaribe**.
 
 De cada confecção o sistema guarda o nome, o CNPJ, o porte e o tipo:
 - **CNPJ:** opcional, porque muitas empresas do polo são informais. Quando informado, não pode se repetir.
@@ -28,7 +28,7 @@ De cada confecção o sistema guarda o nome, o CNPJ, o porte e o tipo:
 
 ### Categorias
 
-As vendas são classificadas em **categorias** de produto, como Moda Feminina, Moda Masculina, Moda Infantil, Fitness e Praia. O nome de cada categoria é único.
+As vendas são classificadas em **categorias** de produto, como Moda Feminina, Moda Masculina, Moda Infantil, Fitness e Praia. O nome de cada categoria é único e tem até 50 caracteres.
 
 ### Lançamentos mensais
 
@@ -37,6 +37,7 @@ O **lançamento mensal** é o registro central do sistema. Ele informa quantas p
 - O mês é sempre guardado como o dia 1 daquele mês.
 - Cada confecção só pode ter **um** lançamento por categoria em cada mês.
 - O lançamento pode ser digitado à mão (origem **MANUAL**) ou vir de uma planilha (origem **IMPORTACAO**). Quando vem de planilha, fica ligado à importação que o gerou.
+- Todo lançamento informa a **fonte do dado**, ou seja, de onde veio a informação: **ENTREVISTA** com o empresário, **QUESTIONARIO** respondido por ele ou **FONTE_SECUNDARIA** (pesquisas, associações, órgãos públicos).
 - Um lançamento errado pode ser **cancelado**. Ele continua guardado no banco, com status CANCELADO, mas deixa de contar nos indicadores e relatórios. Lançamentos válidos têm status ATIVO.
 - Toda alteração ou exclusão de lançamento fica registrada num **histórico**, com os valores de antes e de depois da mudança, quem a fez, a data e a origem do lançamento (manual ou planilha). O administrador consulta esse histórico em relatórios por período, por usuário e por confecção.
 
@@ -56,14 +57,14 @@ Um cenário pode valer para uma categoria específica ou, se nenhuma categoria f
 
 O usuário gera **relatórios** sobre um período (data de início e de fim). Existem quatro tipos:
 
-- **REGIONAL:** compara os estados (PE, PB e AL).
+- **REGIONAL:** compara as cidades do polo (Toritama, Caruaru e Santa Cruz do Capibaribe).
 - **CATEGORIA_PERIODO:** mostra as vendas por categoria no período.
 - **TENDENCIA:** aponta quais vendas estão em alta, em queda ou estáveis.
 - **CENARIO:** aplica um cenário de concorrência às vendas. Só esse tipo usa cenário, e para ele o cenário é obrigatório.
 
-Cada relatório guarda quem o gerou, quando foi gerado e o **limiar de tendência**: o percentual de variação a partir do qual uma venda é considerada em alta ou em queda.
+Cada relatório guarda quem o gerou, quando foi gerado e o **limiar de tendência**, que é de 5%: uma variação de **+5% ou mais** é ALTA, de **−5% ou menos** é QUEDA, e o que fica entre os dois é ESTAVEL.
 
-O resultado do relatório fica em **itens de relatório**. Cada item traz a UF ou a categoria, a quantidade, o faturamento, a variação percentual e a tendência (ALTA, QUEDA ou ESTAVEL). Todo relatório tem pelo menos um item. Se não houver dados no período, o relatório não é gravado.
+O resultado do relatório fica em **itens de relatório**. Cada item traz a cidade ou a categoria, a quantidade, o faturamento, a variação percentual e a tendência (ALTA, QUEDA ou ESTAVEL). Todo relatório tem pelo menos um item. Se não houver dados no período, o relatório não é gravado.
 
 ### Entrevistas
 
@@ -81,11 +82,13 @@ Comparar a categoria percebida com as vendas reais mostra se o empresário conhe
 | RN04 | Lançamento cancelado não é apagado, mas fica fora dos indicadores e relatórios. |
 | RN05 | Se uma linha da planilha for inválida, nada da importação é gravado. |
 | RN06 | O impacto de um cenário fica entre 0 e 100; cenário sem categoria vale para todas. |
-| RN07 | Relatório do tipo CENARIO exige um cenário; relatórios regionais usam apenas PE, PB ou AL. |
-| RN08 | A tendência (ALTA, QUEDA ou ESTAVEL) é definida comparando a variação percentual com o limiar do relatório. |
+| RN07 | Relatório do tipo CENARIO exige um cenário; relatórios regionais comparam as cidades do polo. |
+| RN08 | A tendência é ALTA quando a variação é de +5% ou mais, QUEDA quando é de −5% ou menos, e ESTAVEL entre os dois. |
 | RN09 | A entrevista registra a categoria que o empresário acha que mais vende, que pode ficar em branco. |
 | RN10 | Todo relatório tem pelo menos um item. |
 | RN11 | Toda alteração ou exclusão de lançamento fica registrada no histórico. |
+| RN12 | O sistema atende só confecções de Toritama, Caruaru e Santa Cruz do Capibaribe (PE). |
+| RN13 | Todo lançamento informa a fonte do dado: entrevista, questionário ou fonte secundária. |
 
 ## 5. Requisitos funcionais
 
@@ -100,7 +103,7 @@ Comparar a categoria percebida com as vendas reais mostra se o empresário conhe
 | RF07 | Criar cenários de concorrência. |
 | RF08 | Gerar relatórios dos tipos REGIONAL, CATEGORIA_PERIODO, TENDENCIA e CENARIO. |
 | RF09 | Registrar entrevistas com as confecções. |
-| RF10 | Consultar vendas por estado, por categoria e por período. |
+| RF10 | Consultar vendas por cidade, por categoria e por período. |
 
 ## 6. Requisitos não funcionais
 

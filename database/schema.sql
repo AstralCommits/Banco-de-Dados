@@ -5,8 +5,12 @@ USE confeccoes;
  
 CREATE TABLE cidade (
     id_cidade INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
-    nome VARCHAR(80) NOT NULL,
-    uf CHAR(2) NOT NULL
+    nome VARCHAR(80) NOT NULL UNIQUE,
+    uf CHAR(2) NOT NULL,
+    -- RF02: o TRAMA atende so as tres cidades do Polo Textil do Agreste pernambucano
+    CONSTRAINT chk_cidade_agreste CHECK (
+        uf = 'PE' AND nome IN ('Toritama', 'Caruaru', 'Santa Cruz do Capibaribe')
+    )
 );
  
 CREATE TABLE confeccao (
@@ -38,7 +42,7 @@ CREATE TABLE usuario (
  
 CREATE TABLE categoria (
     id_categoria INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
-    nome VARCHAR(60) NOT NULL UNIQUE
+    nome VARCHAR(50) NOT NULL UNIQUE -- RF01: ate 50 caracteres
 );
  
 CREATE TABLE importacao (
@@ -57,7 +61,8 @@ CREATE TABLE lancamento_mensal (
     mes_referencia DATE NOT NULL, -- sempre o dia 1 do mes
     quantidade INT NOT NULL,
     faturamento DECIMAL(12,2) NOT NULL,
-    origem VARCHAR(10) NOT NULL, -- MANUAL ou IMPORTACAO
+    origem VARCHAR(10) NOT NULL, -- MANUAL ou IMPORTACAO: como o dado entrou no sistema
+    fonte_dado VARCHAR(20) NOT NULL, -- RF04: ENTREVISTA, QUESTIONARIO ou FONTE_SECUNDARIA
     lanc_status VARCHAR(10) NOT NULL DEFAULT 'ATIVO', -- ATIVO ou CANCELADO
     id_confeccao INT NOT NULL,
     id_categoria INT NOT NULL,
@@ -69,6 +74,7 @@ CREATE TABLE lancamento_mensal (
     FOREIGN KEY (id_importacao) REFERENCES importacao (id_importacao),
     CONSTRAINT chk_lanc_dia1      CHECK (DAY(mes_referencia) = 1),
     CONSTRAINT chk_lanc_origem    CHECK (origem IN ('MANUAL','IMPORTACAO')),
+    CONSTRAINT chk_lanc_fonte     CHECK (fonte_dado IN ('ENTREVISTA','QUESTIONARIO','FONTE_SECUNDARIA')),
     CONSTRAINT chk_lanc_status    CHECK (lanc_status IN ('ATIVO','CANCELADO')),
     CONSTRAINT chk_lanc_quant     CHECK (quantidade >= 0),
     CONSTRAINT chk_lanc_fatur     CHECK (faturamento >= 0)
@@ -102,7 +108,7 @@ CREATE TABLE relatorio (
  
 CREATE TABLE item_relatorio (
     id_item INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
-    uf CHAR(2) NULL, -- PE, PB ou AL
+    id_cidade INT NULL, -- cidade comparada no relatorio REGIONAL
     quantidade INT NOT NULL,
     faturamento DECIMAL(12,2) NOT NULL,
     variacao_percentual DECIMAL(7,2) NULL,
@@ -111,7 +117,7 @@ CREATE TABLE item_relatorio (
     id_categoria INT NULL,
     FOREIGN KEY (id_relatorio) REFERENCES relatorio (id_relatorio),
     FOREIGN KEY (id_categoria) REFERENCES categoria (id_categoria),
-    CONSTRAINT chk_item_uf CHECK (uf IS NULL OR uf IN ('PE','PB','AL')),
+    FOREIGN KEY (id_cidade) REFERENCES cidade (id_cidade),
     CONSTRAINT chk_item_tendencia CHECK (tendencia IS NULL OR tendencia IN ('ALTA','QUEDA','ESTAVEL'))
 );
  
@@ -172,6 +178,7 @@ SELECT l.id_lancamento,
        l.quantidade,
        l.faturamento,
        l.origem,
+       l.fonte_dado,
        l.lanc_status,
        c.id_confeccao,
        c.nome AS confeccao,
