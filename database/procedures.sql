@@ -12,15 +12,16 @@ CREATE PROCEDURE inserir_lancamento(
     IN p_quantidade INT,
     IN p_faturamento DECIMAL(12,2),
     IN p_id_confeccao INT,
-    IN p_id_categoria INT
+    IN p_id_categoria INT,
+    IN p_fonte_dado VARCHAR(20)
 )
 BEGIN
     INSERT INTO lancamento_mensal
-    (mes_referencia, quantidade, faturamento, origem, lanc_status,
+    (mes_referencia, quantidade, faturamento, origem, fonte_dado, lanc_status,
      id_confeccao, id_categoria, id_importacao)
     VALUES
     (DATE_FORMAT(p_mes_referencia, '%Y-%m-01'), p_quantidade, p_faturamento,
-     'MANUAL', 'ATIVO', p_id_confeccao, p_id_categoria, NULL);
+     'MANUAL', p_fonte_dado, 'ATIVO', p_id_confeccao, p_id_categoria, NULL);
 END $$
 DELIMITER ;
  

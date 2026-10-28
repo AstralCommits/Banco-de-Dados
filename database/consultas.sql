@@ -1,10 +1,10 @@
 USE confeccoes;
 
-SELECT uf,
+SELECT cidade,
        SUM(faturamento) AS faturamento_total,
        SUM(quantidade)  AS quantidade_total
 FROM vw_lancamentos
-GROUP BY uf
+GROUP BY cidade
 ORDER BY faturamento_total DESC;
  
 SELECT categoria,
@@ -29,7 +29,7 @@ HAVING SUM(faturamento) > 50000
 ORDER BY faturamento_total DESC;
  
 SELECT * FROM vw_lancamentos
-ORDER BY uf, confeccao, mes_referencia;
+ORDER BY cidade, confeccao, mes_referencia;
 
 SELECT c.nome AS confeccao, ci.nome AS cidade, ci.uf, u.nome AS usuario, u.email
 FROM confeccao c
@@ -67,7 +67,8 @@ INNER JOIN usuario u    ON cc.id_usuario = u.id_usuario
 LEFT JOIN categoria cat ON cc.id_categoria = cat.id_categoria
 ORDER BY cc.percentual_impacto DESC;
  
-SELECT cat.nome AS categoria, ir.uf, ir.variacao_percentual, ir.tendencia
+SELECT cat.nome AS categoria, ci.nome AS cidade, ir.variacao_percentual, ir.tendencia
 FROM item_relatorio ir
 INNER JOIN categoria cat ON ir.id_categoria = cat.id_categoria
+LEFT JOIN cidade ci      ON ir.id_cidade = ci.id_cidade
 ORDER BY ir.tendencia, ir.variacao_percentual DESC;
