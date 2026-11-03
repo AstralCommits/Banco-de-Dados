@@ -1,4 +1,3 @@
-
 USE confeccoes;
  
 DROP PROCEDURE IF EXISTS inserir_lancamento;
@@ -39,7 +38,6 @@ BEGIN
             SET MESSAGE_TEXT = 'Lancamento cancelado nao pode ser atualizado.';
     END IF;
  
-    -- O trigger le @id_usuario para registrar quem alterou
     SET @id_usuario = p_id_usuario;
     UPDATE lancamento_mensal
     SET quantidade = p_quantidade,

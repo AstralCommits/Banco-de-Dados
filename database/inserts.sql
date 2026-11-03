@@ -1,4 +1,3 @@
-
 USE confeccoes;
  
 INSERT INTO cidade (id_cidade, nome, uf) VALUES
