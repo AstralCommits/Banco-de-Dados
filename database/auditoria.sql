@@ -1,11 +1,5 @@
 USE confeccoes;
 
--- Auditoria do historico de lancamentos (RN11 / RF06).
--- p_origem: 'MANUAL' para monitorar so as alteracoes de lancamentos digitados a mao,
--- 'IMPORTACAO' para os que vieram de planilha, ou NULL para todos.
-
--- Historico com os nomes da confeccao, categoria, cidade e usuario e a diferenca entre antes e depois.
--- LEFT JOIN porque o historico nao tem FK: a confeccao, a categoria ou o usuario podem nao existir mais.
 CREATE OR REPLACE VIEW vw_historico_lancamento AS
 SELECT h.id_historico,
        h.data_alteracao,
@@ -39,7 +33,6 @@ DROP PROCEDURE IF EXISTS relatorio_historico_periodo;
 DROP PROCEDURE IF EXISTS relatorio_alteracoes_por_usuario;
 DROP PROCEDURE IF EXISTS relatorio_alteracoes_por_confeccao;
 
--- Todas as alteracoes do periodo, da mais recente para a mais antiga
 DELIMITER $$
 CREATE PROCEDURE relatorio_historico_periodo(
     IN p_inicio DATE,
@@ -60,7 +53,6 @@ BEGIN
 END $$
 DELIMITER ;
 
--- Quantas correcoes, cancelamentos e exclusoes cada usuario fez no periodo
 DELIMITER $$
 CREATE PROCEDURE relatorio_alteracoes_por_usuario(
     IN p_inicio DATE,
@@ -73,7 +65,6 @@ BEGIN
            SUM(acao = 'UPDATE' AND status_novo = status_antigo) AS correcoes,
            SUM(acao = 'UPDATE' AND status_novo = 'CANCELADO' AND status_antigo = 'ATIVO') AS cancelamentos,
            SUM(acao = 'DELETE') AS exclusoes,
-           -- impacto nos indicadores: exclusao e cancelamento tiram o faturamento antigo (RN04)
            SUM(CASE WHEN acao = 'DELETE' OR (status_antigo = 'ATIVO' AND status_novo = 'CANCELADO')
                     THEN -faturamento_antigo
                     ELSE diferenca_faturamento END) AS impacto_faturamento,
@@ -87,7 +78,6 @@ BEGIN
 END $$
 DELIMITER ;
 
--- Quantas alteracoes cada confeccao teve no periodo e quanto o faturamento informado mudou
 DELIMITER $$
 CREATE PROCEDURE relatorio_alteracoes_por_confeccao(
     IN p_inicio DATE,
@@ -103,7 +93,6 @@ BEGIN
            SUM(acao = 'UPDATE' AND status_novo = status_antigo) AS correcoes,
            SUM(acao = 'UPDATE' AND status_novo = 'CANCELADO' AND status_antigo = 'ATIVO') AS cancelamentos,
            SUM(acao = 'DELETE') AS exclusoes,
-           -- impacto nos indicadores: exclusao e cancelamento tiram o faturamento antigo (RN04)
            SUM(CASE WHEN acao = 'DELETE' OR (status_antigo = 'ATIVO' AND status_novo = 'CANCELADO')
                     THEN -faturamento_antigo
                     ELSE diferenca_faturamento END) AS impacto_faturamento
@@ -116,7 +105,6 @@ BEGIN
 END $$
 DELIMITER ;
 
--- Teste: relatorios do dia de hoje, com o historico gravado pelos testes do triggers.sql
 SELECT * FROM vw_historico_lancamento;
 CALL relatorio_historico_periodo(CURDATE(), CURDATE(), NULL);
 CALL relatorio_historico_periodo(CURDATE(), CURDATE(), 'MANUAL');
