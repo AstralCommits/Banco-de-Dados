@@ -1,10 +1,5 @@
 USE confeccoes;
 
--- Teste do RNF01: as consultas do painel devem responder em ate 3 segundos com 10.000 vendas.
--- Gera 10.000 lancamentos (100 confeccoes x 5 categorias x 20 meses) dentro de uma transacao
--- e desfaz tudo no final, entao o banco de exemplo continua igual.
--- O tempo de cada consulta aparece no Workbench (Action Output -> Duration) ou no cliente mysql.
-
 SET SESSION cte_max_recursion_depth = 10000;
 
 START TRANSACTION;
@@ -29,7 +24,6 @@ FROM n;
 
 SELECT COUNT(*) AS total_lancamentos FROM lancamento_mensal;
 
--- RF05: faturamento por categoria, filtrado por periodo e cidade
 SELECT categoria,
        SUM(faturamento) AS faturamento_total,
        SUM(quantidade)  AS quantidade_total
@@ -39,7 +33,6 @@ WHERE mes_referencia BETWEEN '2025-01-01' AND '2025-12-01'
 GROUP BY categoria
 ORDER BY faturamento_total DESC;
 
--- RF06: variacao de cada categoria entre dois meses; ALTA a partir de +5% e QUEDA a partir de -5% (inclusive)
 SELECT categoria,
        anterior,
        atual,
@@ -58,10 +51,6 @@ FROM (
     GROUP BY categoria
 ) t;
 
--- Planos de execucao das agregacoes por periodo: na linha da tabela l, a coluna type nunca deve ser
--- ALL (full table scan) e a coluna key deve mostrar um indice. Com estatisticas atualizadas
--- (ANALYZE TABLE lancamento_mensal) o MySQL escolhe idx_lancamento_mes_categoria com type range;
--- logo depois de criar o banco ele pode preferir id_categoria com type ref, que tambem usa indice.
 EXPLAIN
 SELECT categoria, SUM(faturamento), SUM(quantidade)
 FROM vw_lancamentos
