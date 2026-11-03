@@ -32,10 +32,10 @@ CREATE TABLE usuario (
     perfil VARCHAR(10) NOT NULL,
     id_confeccao INT NULL,
     FOREIGN KEY (id_confeccao) REFERENCES confeccao (id_confeccao),
-    CONSTRAINT chk_usuario_perfil CHECK (perfil IN ('ADMIN','CONFECCAO')),
+    CONSTRAINT chk_usuario_perfil CHECK (perfil IN ('ADMIN','EMPRESARIO')),
     CONSTRAINT chk_usuario_perfil_confeccao CHECK (
         (perfil = 'ADMIN' AND id_confeccao IS NULL)
-        OR (perfil = 'CONFECCAO' AND id_confeccao IS NOT NULL)
+        OR (perfil = 'EMPRESARIO' AND id_confeccao IS NOT NULL)
     )
 );
  
@@ -87,7 +87,8 @@ CREATE TABLE cenario_concorrencia (
     id_usuario INT NOT NULL,
     id_categoria INT NULL,
     FOREIGN KEY (id_usuario) REFERENCES usuario (id_usuario),
-    FOREIGN KEY (id_categoria) REFERENCES categoria (id_categoria)
+    FOREIGN KEY (id_categoria) REFERENCES categoria (id_categoria),
+    CONSTRAINT chk_cenario_impacto CHECK (percentual_impacto BETWEEN 0 AND 100)
 );
  
 CREATE TABLE relatorio (

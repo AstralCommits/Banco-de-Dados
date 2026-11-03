@@ -32,10 +32,10 @@ CREATE TABLE usuario (
     perfil VARCHAR(10) NOT NULL,
     id_confeccao INT NULL,
     FOREIGN KEY (id_confeccao) REFERENCES confeccao (id_confeccao),
-    CONSTRAINT chk_usuario_perfil CHECK (perfil IN ('ADMIN','CONFECCAO')),
+    CONSTRAINT chk_usuario_perfil CHECK (perfil IN ('ADMIN','EMPRESARIO')),
     CONSTRAINT chk_usuario_perfil_confeccao CHECK (
         (perfil = 'ADMIN' AND id_confeccao IS NULL)
-        OR (perfil = 'CONFECCAO' AND id_confeccao IS NOT NULL)
+        OR (perfil = 'EMPRESARIO' AND id_confeccao IS NOT NULL)
     )
 );
 
@@ -87,7 +87,8 @@ CREATE TABLE cenario_concorrencia (
     id_usuario INT NOT NULL,
     id_categoria INT NULL,
     FOREIGN KEY (id_usuario) REFERENCES usuario (id_usuario),
-    FOREIGN KEY (id_categoria) REFERENCES categoria (id_categoria)
+    FOREIGN KEY (id_categoria) REFERENCES categoria (id_categoria),
+    CONSTRAINT chk_cenario_impacto CHECK (percentual_impacto BETWEEN 0 AND 100)
 );
 
 CREATE TABLE relatorio (
@@ -168,11 +169,11 @@ INSERT INTO confeccao
 INSERT INTO usuario
 (id_usuario, nome, email, senha_hash, perfil, id_confeccao) VALUES
 (1, 'Administrador', 'admin@confeccoes.com', 'HASH_ADMIN_123', 'ADMIN', NULL),
-(2, 'Ana Silva', 'ana@jeanstoritama.com', 'HASH_ANA_123', 'CONFECCAO', 1),
-(3, 'Bruno Santos', 'bruno@estiloagreste.com', 'HASH_BRUNO_123', 'CONFECCAO', 2),
-(4, 'Carla Oliveira', 'carla@costuranordeste.com', 'HASH_CARLA_123', 'CONFECCAO', 3),
-(5, 'Daniel Lima', 'daniel@sulancasantacruz.com', 'HASH_DANIEL_123', 'CONFECCAO', 4),
-(6, 'Eduarda Costa', 'eduarda@capibaribetextil.com', 'HASH_EDUARDA_123', 'CONFECCAO', 5);
+(2, 'Ana Silva', 'ana@jeanstoritama.com', 'HASH_ANA_123', 'EMPRESARIO', 1),
+(3, 'Bruno Santos', 'bruno@estiloagreste.com', 'HASH_BRUNO_123', 'EMPRESARIO', 2),
+(4, 'Carla Oliveira', 'carla@costuranordeste.com', 'HASH_CARLA_123', 'EMPRESARIO', 3),
+(5, 'Daniel Lima', 'daniel@sulancasantacruz.com', 'HASH_DANIEL_123', 'EMPRESARIO', 4),
+(6, 'Eduarda Costa', 'eduarda@capibaribetextil.com', 'HASH_EDUARDA_123', 'EMPRESARIO', 5);
 
 INSERT INTO categoria (id_categoria, nome) VALUES
 (1, 'Moda Feminina'),
