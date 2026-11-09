@@ -7,7 +7,7 @@ VALUES ('vendas_marco_jeanstoritama.csv', 2, 'CONCLUIDA', 2);
 SET @id_importacao = LAST_INSERT_ID();
  
 INSERT INTO lancamento_mensal
-(mes_referencia, quantidade, faturamento, origem, fonte_dado, lanc_status,
+(mes_referencia, quantidade, faturamento, origem, origem_dado, lanc_status,
  id_confeccao, id_categoria, id_importacao) VALUES
 ('2026-03-01', 530, 37100.00, 'IMPORTACAO', 'QUESTIONARIO', 'ATIVO', 1, 1, @id_importacao),
 ('2026-03-01', 300, 21000.00, 'IMPORTACAO', 'QUESTIONARIO', 'ATIVO', 1, 2, @id_importacao);
@@ -23,7 +23,7 @@ VALUES ('vendas_marco_estiloagreste.csv', 1, 'CONCLUIDA', 3);
 SET @id_importacao = LAST_INSERT_ID();
  
 INSERT INTO lancamento_mensal
-(mes_referencia, quantidade, faturamento, origem, fonte_dado, lanc_status,
+(mes_referencia, quantidade, faturamento, origem, origem_dado, lanc_status,
  id_confeccao, id_categoria, id_importacao) VALUES
 ('2026-03-01', 270, 16200.00, 'IMPORTACAO', 'QUESTIONARIO', 'ATIVO', 2, 1, @id_importacao);
  
