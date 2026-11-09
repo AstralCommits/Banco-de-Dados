@@ -38,7 +38,7 @@ INSERT INTO importacao
  
 INSERT INTO lancamento_mensal
 (id_lancamento, mes_referencia, quantidade, faturamento, origem, lanc_status,
- id_confeccao, id_categoria, id_importacao, fonte_dado) VALUES
+ id_confeccao, id_categoria, id_importacao, origem_dado) VALUES
  
 (1, '2026-01-01', 450, 31500.00, 'IMPORTACAO', 'ATIVO', 1, 1, 1, 'QUESTIONARIO'),
 (2, '2026-01-01', 280, 19600.00, 'MANUAL', 'ATIVO', 1, 2, NULL, 'ENTREVISTA'),

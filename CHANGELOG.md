@@ -8,6 +8,10 @@ Cada versão tem uma tag anotada no Git (`git tag -l -n9` lista todas).
 
 ## [Não lançado]
 
+### Alterado
+- **Incompatível (compatibilização com a API):** em `lancamento_mensal`, a coluna `fonte_dado` passa a se chamar `origem_dado` (VARCHAR(30)) e ganha a companheira `nome_fonte` (VARCHAR(200), padrão "Fonte não informada"), os mesmos nomes da entidade `LancamentoMensal` do Back-end. Sem isso o perfil `dev` da API (`ddl-auto: validate`) não sobe contra este banco. Procedure `inserir_lancamento`, view `vw_lancamentos`, versão SQLite e `extensao.db` acompanham a mudança.
+- Migração `database/migracoes/V0_4_0__origem_dado_nome_fonte.sql` para bancos já criados na v0.3.x.
+
 ### Adicionado
 - Índices para o RNF01 (resposta em até 3 segundos com 10.000 vendas): `idx_lancamento_mes_categoria` e `idx_lancamento_confeccao` em `lancamento_mensal`, mais índices em `historico_lancamento`, `cenario_concorrencia` e `relatorio`, no `schema.sql` e no `banco_completo.sql`.
 - `teste_desempenho.sql`, que gera 10.000 vendas, mede as consultas do painel, mostra o `EXPLAIN` das agregações por período e desfaz os dados no final.

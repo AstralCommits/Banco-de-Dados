@@ -10,7 +10,7 @@ SELECT 1000 + i, CONCAT('Confeccao Teste ', i), NULL, 'MICRO', 'CONFECCAO', 1 + 
 FROM n;
 
 INSERT INTO lancamento_mensal
-(mes_referencia, quantidade, faturamento, origem, fonte_dado, lanc_status, id_confeccao, id_categoria)
+(mes_referencia, quantidade, faturamento, origem, origem_dado, lanc_status, id_confeccao, id_categoria)
 WITH RECURSIVE n (i) AS (SELECT 0 UNION ALL SELECT i + 1 FROM n WHERE i < 9999)
 SELECT DATE_ADD('2024-07-01', INTERVAL i DIV 500 MONTH),
        100 + (i * 37) % 900,
