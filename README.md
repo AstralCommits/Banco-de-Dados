@@ -249,6 +249,10 @@ A numeração segue o [minimundo](docs/minimundo.md).
 | RN12 | O sistema atende só Toritama, Caruaru e Santa Cruz do Capibaribe, em PE (RF02) | `CHECK chk_cidade_agreste` e `UNIQUE` no nome da cidade |
 | RN13 | Todo lançamento informa a fonte do dado: entrevista, questionário ou fonte secundária (RF04) | `origem_dado NOT NULL` com `CHECK chk_lanc_fonte` e `nome_fonte NOT NULL` |
 | RN11 | Toda alteração ou exclusão de lançamento fica no histórico | Triggers `trg_historico_lancamento_update` e `trg_historico_lancamento_delete`; relatórios em `auditoria.sql` |
+| RN14 | Pedido corporativo é feito em lote: cada item tem no mínimo 5 peças (RNF03) | `CHECK chk_item_pedido_lote (quantidade >= 5)` |
+| RN15 | Empresa, produto ou artesão com pedidos ou produtos vinculados não pode ser excluído | `FOREIGN KEY ... ON DELETE RESTRICT` em `pedido_corporativo`, `item_pedido_corporativo` e `produto` |
+| RN16 | Empresa cliente só entra com CNPJ válido e sem repetição | `CHECK chk_empresa_cnpj_formato`, `UNIQUE (cnpj)`, função `cnpj_valido` e triggers `trg_empresa_cnpj_insert`/`update` |
+| RN17 | Pedido entregue ou cancelado não recebe nem altera itens; produto inativo não entra em pedido | Triggers `trg_item_pedido_insert` e `trg_item_pedido_update` |
 
 ## Procedures
 
@@ -330,6 +334,97 @@ O `teste_desempenho.sql` gera 10.000 lançamentos dentro de uma transação, rod
 
 As agregações do `consultas.sql` (por cidade, categoria e mês) também usam índice (`type = ref`), sem *full table scan*. Com esse volume tudo fica muito abaixo dos 3 segundos; os índices tiram o *full table scan* e mantêm a margem quando o número de vendas crescer.
 
+## Pedidos corporativos e catálogo de artesãos (DB-01 e DB-03)
+
+Cinco tabelas novas atendem as encomendas B2B (BACK-01, FRONT-02 e FRONT-04) e a vitrine de artesanato (FRONT-01 e FRONT-03):
+
+```mermaid
+erDiagram
+    artesao            ||--o{ produto                 : cria
+    empresa_cliente    ||--o{ pedido_corporativo      : encomenda
+    usuario            |o--o{ pedido_corporativo      : registra
+    pedido_corporativo ||--|{ item_pedido_corporativo : possui
+    produto            ||--o{ item_pedido_corporativo : "é pedido em"
+
+    artesao {
+        int      id_artesao PK
+        varchar  nome_artistico UK
+        varchar  nome_civil "opcional"
+        varchar  municipio
+        char     uf "PE"
+        smallint ano_nascimento "opcional"
+        smallint ano_falecimento "opcional"
+        varchar  tecnica_principal
+        varchar  reconhecimento
+        varchar  biografia
+    }
+    produto {
+        int     id_produto PK
+        varchar nome
+        varchar descricao
+        varchar tecnica
+        varchar material
+        varchar municipio_origem
+        decimal preco_unitario "> 0"
+        varchar foto_url
+        varchar prod_status "ATIVO | INATIVO"
+        int     id_artesao FK
+    }
+    empresa_cliente {
+        int      id_empresa PK
+        varchar  razao_social
+        varchar  nome_fantasia
+        char     cnpj UK "14 dígitos válidos"
+        varchar  email
+        varchar  telefone
+        varchar  municipio
+        char     uf
+        datetime data_cadastro
+    }
+    pedido_corporativo {
+        int      id_pedido PK
+        datetime data_pedido
+        date     prazo_entrega ">= data_pedido"
+        varchar  ped_status "ORCAMENTO | CONFIRMADO | EM_PRODUCAO | ENTREGUE | CANCELADO"
+        varchar  observacao
+        int      id_empresa FK
+        int      id_usuario FK
+    }
+    item_pedido_corporativo {
+        int     id_item_pedido PK
+        int     quantidade ">= 5"
+        decimal preco_unitario "preço no momento do pedido"
+        int     id_pedido FK
+        int     id_produto FK
+    }
+```
+
+| Chave estrangeira | ON DELETE | Motivo |
+|---|---|---|
+| `produto.id_artesao` → `artesao` | RESTRICT | Não some o autor de um produto do catálogo |
+| `pedido_corporativo.id_empresa` → `empresa_cliente` | RESTRICT | Empresa com pedido não pode ser apagada |
+| `pedido_corporativo.id_usuario` → `usuario` | RESTRICT | Preserva quem registrou o pedido |
+| `item_pedido_corporativo.id_pedido` → `pedido_corporativo` | CASCADE | O item só existe dentro do pedido (composição) |
+| `item_pedido_corporativo.id_produto` → `produto` | RESTRICT | Produto já vendido sai do catálogo com `prod_status = 'INATIVO'`, sem apagar |
+
+O preço fica gravado no item para que um reajuste no catálogo não mude pedidos antigos. A view `vw_pedido_corporativo` soma itens, peças e valor de cada pedido.
+
+### Carga inicial
+
+`05_seed_produtos_pe.sql` cadastra 10 mestres artesãos de Caruaru (Alto do Moura), Olinda, Cabo de Santo Agostinho e Recife e 30 produtos (3 por artesão), além de 4 empresas e 3 pedidos de demonstração.
+
+- Os dados biográficos foram conferidos em publicações da UFPE, da Fundarpe e da imprensa pernambucana. Quando uma informação não foi confirmada (ano de nascimento, nome civil), o campo ficou vazio.
+- Preços, descrições das peças e o caminho das fotos (`/img/produtos/...`) são **de demonstração**: o front-end precisa colocar as imagens nesses caminhos. Peças de mestres já falecidos aparecem como reprodução de ateliê.
+- As empresas são fictícias, com CNPJs que passam no cálculo dos dígitos verificadores.
+
+### Testes
+
+`teste_constraints_pedidos.sql` tenta 18 operações (válidas e inválidas) dentro de transações desfeitas e mostra o resultado de cada uma. Todas devem dar `OK`, entre elas o critério de aceitação do DB-01: um item com 4 peças é rejeitado pela constraint `chk_item_pedido_lote`.
+
+```bash
+docker compose exec -T mysql mysql -uroot -proot confeccoes < database/teste_constraints_pedidos.sql
+```
+
 ## Arquivos
 
 | Arquivo | Conteúdo |
@@ -339,6 +434,9 @@ As agregações do `consultas.sql` (por cidade, categoria e mês) também usam �
 | [banco_completo.sql](database/banco_completo.sql) | Todos os arquivos abaixo em um único script, na ordem certa; recria o banco do zero |
 | [schema.sql](database/schema.sql) | Criação do banco, das 10 tabelas, da tabela de auditoria `historico_lancamento` e dos índices do RNF01 |
 | [inserts.sql](database/inserts.sql) | Dados de exemplo para todas as tabelas |
+| [04_constraints_pedidos_lote.sql](database/04_constraints_pedidos_lote.sql) | Tabelas de artesãos, produtos, empresas e pedidos corporativos, com constraints, função de CNPJ, triggers, índices e view (DB-01) |
+| [05_seed_produtos_pe.sql](database/05_seed_produtos_pe.sql) | Carga de 10 mestres artesãos, 30 produtos e pedidos de demonstração (DB-03) |
+| [teste_constraints_pedidos.sql](database/teste_constraints_pedidos.sql) | Testes das constraints dos pedidos corporativos; não fica no `banco_completo.sql` e não altera os dados |
 | [procedures.sql](database/procedures.sql) | Procedures para inserir, atualizar, cancelar e excluir lançamentos |
 | [triggers.sql](database/triggers.sql) | Triggers que gravam no histórico os UPDATE e DELETE de lançamentos, com testes |
 | [auditoria.sql](database/auditoria.sql) | View e procedures de relatório do histórico de lançamentos |
@@ -347,7 +445,7 @@ As agregações do `consultas.sql` (por cidade, categoria e mês) também usam �
 | [consultas.sql](database/consultas.sql) | Consultas com `INNER JOIN`, `LEFT JOIN`, `GROUP BY`, `COUNT`, `AVG`, `MAX` e `MIN` |
 | [teste_desempenho.sql](database/teste_desempenho.sql) | Teste do RNF01 com 10.000 vendas; não fica no `banco_completo.sql` e não altera os dados |
 | [schema_sqlite.sql](database/schema_sqlite.sql) | Versão SQLite3 do `schema.sql`, com os triggers e a view |
-| [gerar_sqlite.py](database/gerar_sqlite.py) | Gera o `extensao.db` a partir do `schema_sqlite.sql` e do `inserts.sql` |
+| [gerar_sqlite.py](database/gerar_sqlite.py) | Gera o `extensao.db` a partir do `schema_sqlite.sql`, do `inserts.sql` e do `05_seed_produtos_pe.sql` |
 | [extensao.db](database/extensao.db) | Banco SQLite pronto, com os dados de exemplo |
 
 ## Como executar
@@ -516,6 +614,7 @@ sed '/^USE /d' database/inserts.sql | sqlite3 database/extensao.db
 | `DATE`, `DATETIME` | `TEXT` em ISO 8601 (`AAAA-MM-DD` e `AAAA-MM-DD HH:MM:SS`), validado por `CHECK` |
 | `DAY(mes_referencia) = 1` | `strftime('%d', mes_referencia) = '01'` |
 | Procedures (`procedures.sql`, `auditoria.sql`) | Não existem no SQLite: inserir, atualizar, cancelar e excluir lançamentos e os relatórios de auditoria ficam com o back-end (a view `vw_historico_lancamento` existe) |
+| Função `cnpj_valido` e triggers de CNPJ | O SQLite confere só o formato (14 dígitos); o cálculo dos dígitos verificadores fica com o back-end |
 | `@id_usuario` no histórico | O SQLite não tem variáveis de sessão: os triggers gravam `id_usuario` vazio e o back-end preenche logo depois da alteração, na mesma transação: `UPDATE historico_lancamento SET id_usuario = ? WHERE id_historico = (SELECT MAX(id_historico) FROM historico_lancamento WHERE id_lancamento = ?)` (`last_insert_rowid()` não serve, porque não enxerga os inserts feitos pelos triggers) |
 
 `NUMERIC` guarda os valores como número de ponto flutuante quando têm casas decimais, então somas de faturamento podem ter diferenças de centavos em casas muito distantes. Para desenvolvimento local isso não atrapalha; o MySQL continua sendo o banco oficial.

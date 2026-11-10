@@ -17,18 +17,19 @@ jobs:
       - name: Subir o banco com docker compose up -d
         run: docker compose up -d --wait --wait-timeout 300
 
-      - name: Conferir que as 11 tabelas existem
+      - name: Conferir que as 16 tabelas existem
         run: |
           total=$(docker compose exec -T mysql mysql -utrama -ptrama -N -e \
             "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'confeccoes' AND table_type = 'BASE TABLE'" 2>/dev/null)
           echo "Tabelas no banco confeccoes: $total"
-          test "$total" -eq 11
+          test "$total" -eq 16
 
       - name: Conferir que todas as tabelas tem dados
         run: |
           falhou=0
           for tabela in cidade confeccao usuario categoria importacao lancamento_mensal \
-                        cenario_concorrencia relatorio item_relatorio entrevista historico_lancamento; do
+                        cenario_concorrencia relatorio item_relatorio entrevista historico_lancamento \
+                        artesao produto empresa_cliente pedido_corporativo item_pedido_corporativo; do
             linhas=$(docker compose exec -T mysql mysql -utrama -ptrama confeccoes -N -e "SELECT COUNT(*) FROM $tabela" 2>/dev/null)
             echo "$tabela: $linhas linhas"
             if [ -z "$linhas" ] || [ "$linhas" -eq 0 ]; then falhou=1; fi
@@ -46,7 +47,19 @@ jobs:
             "SELECT COUNT(*) FROM information_schema.routines WHERE routine_schema = 'confeccoes'" 2>/dev/null)
           triggers=$(docker compose exec -T mysql mysql -utrama -ptrama -N -e \
             "SELECT COUNT(*) FROM information_schema.triggers WHERE trigger_schema = 'confeccoes'" 2>/dev/null)
-          test "$procedures" -eq 7 && test "$triggers" -eq 2
+          test "$procedures" -eq 8 && test "$triggers" -eq 6
+
+      - name: Testar constraints dos pedidos corporativos (DB-01)
+        run: |
+          docker compose exec -T mysql mysql -uroot -proot confeccoes < database/teste_constraints_pedidos.sql 2>/dev/null | tee resultado.txt
+          tail -1 resultado.txt | awk '{ exit ($3 != 0) }'
+
+      - name: Conferir a carga de 30 produtos e 10 artesaos (DB-03)
+        run: |
+          produtos=$(docker compose exec -T mysql mysql -utrama -ptrama confeccoes -N -e "SELECT COUNT(*) FROM produto" 2>/dev/null)
+          artesaos=$(docker compose exec -T mysql mysql -utrama -ptrama confeccoes -N -e "SELECT COUNT(*) FROM artesao" 2>/dev/null)
+          echo "produtos: $produtos, artesaos: $artesaos"
+          test "$produtos" -eq 30 && test "$artesaos" -eq 10
 
       - name: Mostrar o log do MySQL se algo falhar
         if: failure()
