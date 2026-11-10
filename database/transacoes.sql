@@ -29,13 +29,12 @@ INSERT INTO lancamento_mensal
  
 ROLLBACK;
  
--- Nada foi gravado, entao qtd_linhas fica NULL
 INSERT INTO importacao (nome_arquivo, qtd_linhas, imp_status, id_usuario)
 VALUES ('vendas_marco_estiloagreste.csv', NULL, 'ERRO', 3);
  
 SELECT * FROM importacao;
 SELECT * FROM lancamento_mensal WHERE id_confeccao = 2 AND mes_referencia = '2026-03-01';
-
+ 
 START TRANSACTION;
  
 INSERT INTO relatorio (tipo, periodo_inicio, periodo_fim, limiar_tendencia, id_usuario)
@@ -73,3 +72,4 @@ VALUES ('TENDENCIA', '2025-01-01', '2025-03-31', 5.00, 2);
  
 ROLLBACK;
 SELECT * FROM relatorio;
+ 

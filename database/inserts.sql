@@ -1,4 +1,3 @@
-
 USE confeccoes;
  
 INSERT INTO cidade (id_cidade, nome, uf) VALUES
@@ -18,11 +17,11 @@ INSERT INTO confeccao
 INSERT INTO usuario
 (id_usuario, nome, email, senha_hash, perfil, id_confeccao) VALUES
 (1, 'Administrador', 'admin@confeccoes.com', 'HASH_ADMIN_123', 'ADMIN', NULL),
-(2, 'Ana Silva', 'ana@modarecife.com', 'HASH_ANA_123', 'CONFECCAO', 1),
-(3, 'Bruno Santos', 'bruno@estiloagreste.com', 'HASH_BRUNO_123', 'CONFECCAO', 2),
-(4, 'Carla Oliveira', 'carla@costuranordeste.com', 'HASH_CARLA_123', 'CONFECCAO', 3),
-(5, 'Daniel Lima', 'daniel@paraibafashion.com', 'HASH_DANIEL_123', 'CONFECCAO', 4),
-(6, 'Eduarda Costa', 'eduarda@alagoastextil.com', 'HASH_EDUARDA_123', 'CONFECCAO', 5);
+(2, 'Ana Silva', 'ana@modarecife.com', 'HASH_ANA_123', 'EMPRESARIO', 1),
+(3, 'Bruno Santos', 'bruno@estiloagreste.com', 'HASH_BRUNO_123', 'EMPRESARIO', 2),
+(4, 'Carla Oliveira', 'carla@costuranordeste.com', 'HASH_CARLA_123', 'EMPRESARIO', 3),
+(5, 'Daniel Lima', 'daniel@paraibafashion.com', 'HASH_DANIEL_123', 'EMPRESARIO', 4),
+(6, 'Eduarda Costa', 'eduarda@alagoastextil.com', 'HASH_EDUARDA_123', 'EMPRESARIO', 5);
  
 INSERT INTO categoria (id_categoria, nome) VALUES
 (1, 'Moda Feminina'),
@@ -135,3 +134,4 @@ INSERT INTO entrevista
 (5, '2026-03-05',
  'Nao foram identificadas novas tendencias relevantes.',
  'NAO', 3, NULL);
+ 

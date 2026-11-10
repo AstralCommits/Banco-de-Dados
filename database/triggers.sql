@@ -27,7 +27,6 @@ BEGIN
 END $$
 DELIMITER ;
  
--- Teste: chama as procedures e confere o log gerado pelos triggers
 CALL inserir_lancamento('2026-03-15', 360, 25200.00, 4, 4);
 SET @id_novo = LAST_INSERT_ID();
 SELECT * FROM lancamento_mensal WHERE id_lancamento = @id_novo;
@@ -35,3 +34,4 @@ CALL atualizar_lancamento(10, 350, 24500.00);
 CALL cancelar_lancamento(8);
 CALL excluir_lancamento(@id_novo);
 SELECT * FROM log_lancamento;
+ 

@@ -1,5 +1,19 @@
 USE confeccoes;
-
+ 
+SELECT * FROM cenario_concorrencia
+WHERE percentual_impacto > 10
+ORDER BY percentual_impacto DESC;
+ 
+SELECT * FROM confeccao WHERE nome LIKE 'Moda%';
+ 
+SELECT * FROM confeccao
+WHERE id_cidade IN (SELECT id_cidade FROM cidade WHERE uf = 'PE');
+ 
+SELECT * FROM lancamento_mensal
+WHERE mes_referencia BETWEEN '2026-01-01' AND '2026-02-01';
+ 
+SELECT DISTINCT uf FROM cidade ORDER BY uf;
+ 
 SELECT uf,
        SUM(faturamento) AS faturamento_total,
        SUM(quantidade)  AS quantidade_total
@@ -30,7 +44,7 @@ ORDER BY faturamento_total DESC;
  
 SELECT * FROM vw_lancamentos
 ORDER BY uf, confeccao, mes_referencia;
-
+ 
 SELECT c.nome AS confeccao, ci.nome AS cidade, ci.uf, u.nome AS usuario, u.email
 FROM confeccao c
 INNER JOIN cidade ci ON c.id_cidade = ci.id_cidade
@@ -71,3 +85,4 @@ SELECT cat.nome AS categoria, ir.uf, ir.variacao_percentual, ir.tendencia
 FROM item_relatorio ir
 INNER JOIN categoria cat ON ir.id_categoria = cat.id_categoria
 ORDER BY ir.tendencia, ir.variacao_percentual DESC;
+ 

@@ -1,4 +1,3 @@
-
 USE confeccoes;
  
 DROP PROCEDURE IF EXISTS inserir_lancamento;
@@ -31,6 +30,7 @@ CREATE PROCEDURE atualizar_lancamento(
     IN p_faturamento DECIMAL(12,2)
 )
 BEGIN
+    -- Nao permite alterar lancamentos ja cancelados
     IF (SELECT lanc_status FROM lancamento_mensal
         WHERE id_lancamento = p_id_lancamento) = 'CANCELADO' THEN
         SIGNAL SQLSTATE '45000'
@@ -64,3 +64,4 @@ BEGIN
     WHERE id_lancamento = p_id_lancamento;
 END $$
 DELIMITER ;
+ 

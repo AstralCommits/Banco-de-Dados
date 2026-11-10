@@ -10,7 +10,7 @@ SELECT * FROM cenario_concorrencia;
 SELECT * FROM relatorio;
 SELECT * FROM item_relatorio;
 SELECT * FROM entrevista;
-
+ 
 SELECT
     (SELECT COUNT(*) FROM cidade)            AS total_cidades,
     (SELECT COUNT(*) FROM confeccao)         AS total_confeccoes,
@@ -40,7 +40,7 @@ UNION ALL
 SELECT 'lancamento.origem', origem, COUNT(*) FROM lancamento_mensal GROUP BY origem
 UNION ALL
 SELECT 'lancamento.status', lanc_status, COUNT(*) FROM lancamento_mensal GROUP BY lanc_status;
-
+ 
 SELECT 'usuario sem confeccao' AS caso, COUNT(*) AS qtd FROM usuario WHERE id_confeccao IS NULL
 UNION ALL
 SELECT 'cenario sem categoria', COUNT(*) FROM cenario_concorrencia WHERE id_categoria IS NULL
@@ -51,16 +51,3 @@ SELECT 'entrevista sem categoria', COUNT(*) FROM entrevista WHERE id_categoria_p
 UNION ALL
 SELECT 'lancamento sem importacao', COUNT(*) FROM lancamento_mensal WHERE id_importacao IS NULL;
  
-SELECT * FROM cenario_concorrencia
-WHERE percentual_impacto > 10
-ORDER BY percentual_impacto DESC;
- 
-SELECT * FROM confeccao WHERE nome LIKE 'Moda%';
- 
-SELECT * FROM confeccao
-WHERE id_cidade IN (SELECT id_cidade FROM cidade WHERE uf = 'PE');
- 
-SELECT * FROM lancamento_mensal
-WHERE mes_referencia BETWEEN '2026-01-01' AND '2026-02-01';
- 
-SELECT DISTINCT uf FROM cidade ORDER BY uf;

@@ -26,13 +26,14 @@ CREATE TABLE usuario (
     nome VARCHAR(100) NOT NULL,
     email VARCHAR(120) NOT NULL UNIQUE,
     senha_hash VARCHAR(255) NOT NULL,
-    perfil VARCHAR(10) NOT NULL, -- ADMIN ou CONFECCAO
+    perfil VARCHAR(10) NOT NULL, -- ADMIN ou EMPRESARIO (RF09)
     id_confeccao INT NULL,
     FOREIGN KEY (id_confeccao) REFERENCES confeccao (id_confeccao),
-    CONSTRAINT chk_usuario_perfil CHECK (perfil IN ('ADMIN','CONFECCAO')),
+    CONSTRAINT chk_usuario_perfil CHECK (perfil IN ('ADMIN','EMPRESARIO')),
+    -- ADMIN nao pertence a confeccao; usuario EMPRESARIO precisa pertencer a uma
     CONSTRAINT chk_usuario_perfil_confeccao CHECK (
         (perfil = 'ADMIN' AND id_confeccao IS NULL)
-        OR (perfil = 'CONFECCAO' AND id_confeccao IS NOT NULL)
+        OR (perfil = 'EMPRESARIO' AND id_confeccao IS NOT NULL)
     )
 );
  
@@ -82,7 +83,9 @@ CREATE TABLE cenario_concorrencia (
     id_usuario INT NOT NULL,
     id_categoria INT NULL,
     FOREIGN KEY (id_usuario) REFERENCES usuario (id_usuario),
-    FOREIGN KEY (id_categoria) REFERENCES categoria (id_categoria)
+    FOREIGN KEY (id_categoria) REFERENCES categoria (id_categoria),
+    -- RF07 / RN06: impacto de 0 a 100
+    CONSTRAINT chk_cenario_impacto CHECK (percentual_impacto >= 0 AND percentual_impacto <= 100)
 );
  
 CREATE TABLE relatorio (
@@ -156,3 +159,4 @@ INNER JOIN confeccao c   ON l.id_confeccao = c.id_confeccao
 INNER JOIN categoria cat ON l.id_categoria = cat.id_categoria
 INNER JOIN cidade ci     ON c.id_cidade = ci.id_cidade
 WHERE l.lanc_status = 'ATIVO';
+ 
