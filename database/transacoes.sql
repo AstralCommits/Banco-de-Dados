@@ -29,6 +29,7 @@ INSERT INTO lancamento_mensal
  
 ROLLBACK;
  
+-- Nada foi gravado, entao qtd_linhas fica NULL
 INSERT INTO importacao (nome_arquivo, qtd_linhas, imp_status, id_usuario)
 VALUES ('vendas_marco_estiloagreste.csv', NULL, 'ERRO', 3);
  

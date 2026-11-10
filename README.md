@@ -33,7 +33,7 @@ erDiagram
 |---|---|---|
 | **Cidade** | id_cidade | nome (Toritama, Caruaru ou Santa Cruz do Capibaribe), uf (PE) |
 | **Confecção** | id_confeccao | nome, cnpj (opcional), porte (micro, pequena, média), tipo (confecção, facção) |
-| **Usuário** | id_usuario | nome, email, senha_hash, perfil (ADMIN, EMPRESARIO) |
+| **Usuário** | id_usuario | nome, email, senha_hash, perfil (ADMIN, CONFECCAO) |
 | **Categoria** | id_categoria | nome (até 50 caracteres) |
 | **Lançamento mensal** | id_lancamento | mes_referencia, quantidade, faturamento, origem (MANUAL, IMPORTACAO), fonte_dado (ENTREVISTA, QUESTIONARIO, FONTE_SECUNDARIA), status (ATIVO, CANCELADO) |
 | **Importação** | id_importacao | nome_arquivo, data_importacao, qtd_linhas, status (CONCLUIDA, ERRO) |
@@ -83,7 +83,7 @@ erDiagram
         varchar nome
         varchar email UK
         varchar senha_hash
-        varchar perfil "ADMIN | EMPRESARIO"
+        varchar perfil "ADMIN | CONFECCAO"
         int     id_confeccao FK "NULL se ADMIN"
     }
     categoria {
@@ -197,7 +197,7 @@ Cada participação (0,1) do modelo existe por causa de uma regra do [minimundo]
 
 | Relacionamento | Por que é (0,1) | Regra | Garantia no banco |
 |---|---|---|---|
-| Confecção → Usuário | O ADMIN não pertence a nenhuma confecção | RN02 | `id_confeccao` aceita NULL; `CHECK chk_usuario_perfil_confeccao` garante a combinação |
+| Confecção → Usuário | O ADMIN não pertence a nenhuma confecção | RN02 | `id_confeccao` aceita NULL; perfil validado pelo sistema |
 | Importação → Lançamento mensal | O lançamento pode ser digitado à mão (origem MANUAL) | — | `id_importacao` aceita NULL; `origem` guarda MANUAL ou IMPORTACAO |
 | Categoria → Cenário de concorrência | Um cenário sem categoria vale para todas | RN06 | FK aceita NULL |
 | Cenário de concorrência → Relatório | Só o relatório do tipo CENARIO usa cenário | RN07 | `id_cenario` aceita NULL; tipo validado pelo sistema |
@@ -214,7 +214,7 @@ Em um relacionamento 1:N, a FK fica no lado N. Se a cardinalidade desse lado é 
 | Tabela (lado N) | FK | Referencia | Obrigatória? |
 |---|---|---|---|
 | confeccao | id_cidade | cidade | Sim |
-| usuario | id_confeccao | confeccao | Não (só para perfil EMPRESARIO) |
+| usuario | id_confeccao | confeccao | Não (só para perfil CONFECCAO) |
 | lancamento_mensal | id_confeccao | confeccao | Sim |
 | lancamento_mensal | id_categoria | categoria | Sim |
 | lancamento_mensal | id_importacao | importacao | Não (só para origem IMPORTACAO) |
@@ -236,11 +236,11 @@ A numeração segue o [minimundo](docs/minimundo.md).
 | # | Regra | Implementação |
 |---|---|---|
 | RN01 | Cada confecção fica em uma única cidade; CNPJ opcional, mas sem repetição | `id_cidade NOT NULL`; `cnpj` aceita NULL e é `UNIQUE` |
-| RN02 | ADMIN não tem confecção; EMPRESARIO tem exatamente uma | `CHECK chk_usuario_perfil_confeccao` |
+| RN02 | ADMIN não tem confecção; CONFECCAO tem exatamente uma | `id_confeccao` opcional; combinação validada pelo sistema |
 | RN03 | Um lançamento por confecção, categoria e mês | `UNIQUE (id_confeccao, id_categoria, mes_referencia)` |
 | RN04 | Lançamento cancelado fica fora dos indicadores e relatórios | Procedure `cancelar_lancamento` muda o status sem apagar; as consultas filtram `lanc_status = 'ATIVO'` |
 | RN05 | Linha inválida na planilha: nada da importação é gravado | Transação em `transacoes.sql` |
-| RN06 | Impacto entre 0 e 100; cenário sem categoria vale para todas | `id_categoria` opcional; `CHECK chk_cenario_impacto` (0 a 100) |
+| RN06 | Impacto entre 0 e 100; cenário sem categoria vale para todas | `id_categoria` opcional; faixa 0–100 validada pelo sistema |
 | RN07 | Relatório CENARIO exige cenário; o REGIONAL compara as cidades do polo | `id_cidade` com FK para `cidade`; cenário obrigatório validado pelo sistema |
 | RN08 | Tendência: ALTA se a variação for **≥ +5%**, QUEDA se for **≤ −5%**, ESTAVEL entre os dois (limites inclusivos) | Calculada ao gerar o relatório; `limiar_tendencia` guarda os 5% usados |
 | RN09 | Entrevista registra a categoria que o empresário *acha* que mais vende | `id_categoria_percebida` aceita NULL |
@@ -427,62 +427,6 @@ mysql -u root -p < database/teste_desempenho.sql
 Para recomeçar do zero, apague o banco antes com `DROP DATABASE confeccoes;`.
 
 Pelo **MySQL Workbench**: abra cada arquivo em *File → Open SQL Script* e execute (⚡), na mesma ordem.
-
-## Backup e restauração
-
-O backup usa o `mysqldump` e guarda as tabelas, os dados, as views, as procedures e os triggers. Os arquivos ficam na pasta `backups/`, que está no `.gitignore` para não irem para o GitHub.
-
-### Com Docker
-
-Os comandos rodam o `mysqldump` **dentro** do container e depois copiam o arquivo. Assim o backup sai em UTF-8 em qualquer terminal (o `>` do PowerShell gravaria o arquivo em outra codificação e quebraria os acentos).
-
-Fazer o backup:
-
-```bash
-docker compose exec mysql sh -c "mysqldump -uroot -proot --databases confeccoes --add-drop-database --routines --triggers --set-gtid-purged=OFF > /tmp/backup.sql"
-docker compose cp mysql:/tmp/backup.sql backups/backup_confeccoes.sql
-```
-
-Restaurar um backup (apaga o banco atual e recria igual ao backup):
-
-```bash
-docker compose cp backups/backup_confeccoes.sql mysql:/tmp/backup.sql
-docker compose exec mysql sh -c "mysql -uroot -proot < /tmp/backup.sql"
-```
-
-### Com MySQL instalado
-
-No **Git Bash**, na pasta do repositório:
-
-```bash
-mysqldump -u root -p --databases confeccoes --add-drop-database --routines --triggers --set-gtid-purged=OFF --result-file=backups/backup_confeccoes.sql
-mysql -u root -p < backups/backup_confeccoes.sql
-```
-
-O primeiro comando faz o backup e o segundo restaura. O `--result-file` grava o arquivo direto em UTF-8, sem depender do terminal.
-
-### Voltar ao estado inicial
-
-Para descartar tudo e voltar aos dados de exemplo do repositório:
-
-| Ambiente | Comando |
-|---|---|
-| Docker | `docker compose down -v` e depois `docker compose up -d` |
-| MySQL instalado | `mysql -u root -p < database/banco_completo.sql` |
-| SQLite | `python database/gerar_sqlite.py` |
-
-### Conferir a integridade depois de restaurar
-
-```sql
-USE confeccoes;
-SELECT COUNT(*) FROM lancamento_mensal;
-SELECT COUNT(*) FROM historico_lancamento;
-SHOW PROCEDURE STATUS WHERE Db = 'confeccoes';
-SHOW TRIGGERS FROM confeccoes;
-CHECK TABLE cidade, confeccao, usuario, categoria, lancamento_mensal;
-```
-
-As contagens devem bater com as do banco de onde o backup saiu, e o `CHECK TABLE` deve mostrar `OK` em todas as linhas.
 ## Banco local em SQLite (`extensao.db`)
 
 Para quem precisa de um banco local sem instalar MySQL nem Docker, o repositório traz uma versão SQLite3 do mesmo modelo: as 11 tabelas, todas as chaves primárias e estrangeiras, os `UNIQUE`, os `CHECK`, os dois triggers do histórico de lançamento e as views `vw_lancamentos` e `vw_historico_lancamento`, com os mesmos dados de exemplo do `inserts.sql`.

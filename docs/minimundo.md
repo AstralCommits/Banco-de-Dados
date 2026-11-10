@@ -11,7 +11,7 @@ O sistema reúne, todo mês, quanto cada confecção vendeu em cada categoria de
 O sistema tem dois perfis de usuário:
 
 - **ADMIN:** administra a rede. Não pertence a nenhuma confecção. Gera relatórios de toda a região e cria cenários de concorrência.
-- **EMPRESARIO:** representa uma única confecção. Informa as vendas da sua empresa (à mão ou por planilha), cria cenários e gera relatórios.
+- **CONFECCAO:** representa uma única confecção. Informa as vendas da sua empresa (à mão ou por planilha), cria cenários e gera relatórios.
 
 Todo usuário tem nome, e-mail (único no sistema) e senha, que é guardada criptografada (hash).
 
@@ -77,7 +77,7 @@ Comparar a categoria percebida com as vendas reais mostra se o empresário conhe
 | # | Regra |
 |---|---|
 | RN01 | Cada confecção fica em uma única cidade; o CNPJ é opcional, mas não pode se repetir. |
-| RN02 | O usuário ADMIN não pertence a nenhuma confecção; o usuário EMPRESARIO pertence a exatamente uma. |
+| RN02 | O usuário ADMIN não pertence a nenhuma confecção; o usuário CONFECCAO pertence a exatamente uma. |
 | RN03 | Cada confecção tem no máximo um lançamento por categoria em cada mês. |
 | RN04 | Lançamento cancelado não é apagado, mas fica fora dos indicadores e relatórios. |
 | RN05 | Se uma linha da planilha for inválida, nada da importação é gravado. |
@@ -95,7 +95,7 @@ Comparar a categoria percebida com as vendas reais mostra se o empresário conhe
 | # | Requisito |
 |---|---|
 | RF01 | Cadastrar cidades, confecções e categorias. |
-| RF02 | Cadastrar usuários com perfil ADMIN ou EMPRESARIO. |
+| RF02 | Cadastrar usuários com perfil ADMIN ou CONFECCAO. |
 | RF03 | Registrar lançamentos mensais manualmente. |
 | RF04 | Importar lançamentos a partir de uma planilha. |
 | RF05 | Corrigir, cancelar e excluir lançamentos. |

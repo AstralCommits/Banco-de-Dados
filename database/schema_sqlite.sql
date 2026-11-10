@@ -1,3 +1,15 @@
+-- Versao SQLite3 do schema.sql, para persistencia local (arquivo extensao.db).
+-- Adaptacoes em relacao ao MySQL:
+--   INT AUTO_INCREMENT   -> INTEGER PRIMARY KEY AUTOINCREMENT
+--   VARCHAR / CHAR       -> TEXT (o SQLite nao limita tamanho; os limites viraram CHECK de length)
+--   DECIMAL(p,s)         -> NUMERIC
+--   DATE / DATETIME      -> TEXT no formato ISO 8601 ('AAAA-MM-DD' e 'AAAA-MM-DD HH:MM:SS'), validado por CHECK
+--   DAY(data) = 1        -> strftime('%d', data) = '01'
+-- O SQLite nao tem procedures: inserir, atualizar, cancelar e excluir lancamentos ficam com o back-end,
+-- assim como os relatorios de auditoria do auditoria.sql (a view vw_historico_lancamento existe aqui).
+-- Tambem nao tem variaveis de sessao: os triggers gravam id_usuario NULL e o back-end preenche depois.
+-- As chaves estrangeiras so valem com PRAGMA foreign_keys = ON, que precisa ser ligado em cada conexao.
+
 PRAGMA foreign_keys = ON;
 
 DROP VIEW IF EXISTS vw_historico_lancamento;
@@ -18,6 +30,7 @@ CREATE TABLE cidade (
     id_cidade INTEGER PRIMARY KEY AUTOINCREMENT,
     nome TEXT NOT NULL UNIQUE,
     uf TEXT NOT NULL,
+    -- RF02: o TRAMA atende so as tres cidades do Polo Textil do Agreste pernambucano
     CONSTRAINT chk_cidade_agreste CHECK (
         uf = 'PE' AND nome IN ('Toritama', 'Caruaru', 'Santa Cruz do Capibaribe')
     )
@@ -27,8 +40,8 @@ CREATE TABLE confeccao (
     id_confeccao INTEGER PRIMARY KEY AUTOINCREMENT,
     nome TEXT NOT NULL,
     cnpj TEXT NULL UNIQUE,
-    porte TEXT NOT NULL,
-    tipo TEXT NOT NULL,
+    porte TEXT NOT NULL, -- MICRO, PEQUENA ou MEDIA
+    tipo TEXT NOT NULL,  -- CONFECCAO ou FACCAO
     id_cidade INTEGER NOT NULL,
     FOREIGN KEY (id_cidade) REFERENCES cidade (id_cidade),
     CONSTRAINT chk_confeccao_porte CHECK (porte IN ('MICRO','PEQUENA','MEDIA')),
@@ -40,19 +53,19 @@ CREATE TABLE usuario (
     nome TEXT NOT NULL,
     email TEXT NOT NULL UNIQUE,
     senha_hash TEXT NOT NULL,
-    perfil TEXT NOT NULL,
+    perfil TEXT NOT NULL, -- ADMIN ou CONFECCAO
     id_confeccao INTEGER NULL,
     FOREIGN KEY (id_confeccao) REFERENCES confeccao (id_confeccao),
-    CONSTRAINT chk_usuario_perfil CHECK (perfil IN ('ADMIN','EMPRESARIO')),
+    CONSTRAINT chk_usuario_perfil CHECK (perfil IN ('ADMIN','CONFECCAO')),
     CONSTRAINT chk_usuario_perfil_confeccao CHECK (
         (perfil = 'ADMIN' AND id_confeccao IS NULL)
-        OR (perfil = 'EMPRESARIO' AND id_confeccao IS NOT NULL)
+        OR (perfil = 'CONFECCAO' AND id_confeccao IS NOT NULL)
     )
 );
 
 CREATE TABLE categoria (
     id_categoria INTEGER PRIMARY KEY AUTOINCREMENT,
-    nome TEXT NOT NULL UNIQUE CHECK (length(nome) <= 50)
+    nome TEXT NOT NULL UNIQUE CHECK (length(nome) <= 50) -- RF01: ate 50 caracteres
 );
 
 CREATE TABLE importacao (
@@ -60,7 +73,7 @@ CREATE TABLE importacao (
     nome_arquivo TEXT NOT NULL,
     data_importacao TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     qtd_linhas INTEGER NULL,
-    imp_status TEXT NOT NULL,
+    imp_status TEXT NOT NULL, -- CONCLUIDA ou ERRO
     id_usuario INTEGER NOT NULL,
     FOREIGN KEY (id_usuario) REFERENCES usuario (id_usuario),
     CONSTRAINT chk_imp_data   CHECK (data_importacao IS datetime(data_importacao)),
@@ -69,12 +82,12 @@ CREATE TABLE importacao (
 
 CREATE TABLE lancamento_mensal (
     id_lancamento INTEGER PRIMARY KEY AUTOINCREMENT,
-    mes_referencia TEXT NOT NULL,
+    mes_referencia TEXT NOT NULL, -- sempre o dia 1 do mes
     quantidade INTEGER NOT NULL,
     faturamento NUMERIC NOT NULL,
-    origem TEXT NOT NULL,
-    fonte_dado TEXT NOT NULL,
-    lanc_status TEXT NOT NULL DEFAULT 'ATIVO',
+    origem TEXT NOT NULL, -- MANUAL ou IMPORTACAO: como o dado entrou no sistema
+    fonte_dado TEXT NOT NULL, -- RF04: ENTREVISTA, QUESTIONARIO ou FONTE_SECUNDARIA
+    lanc_status TEXT NOT NULL DEFAULT 'ATIVO', -- ATIVO ou CANCELADO
     id_confeccao INTEGER NOT NULL,
     id_categoria INTEGER NOT NULL,
     id_importacao INTEGER NULL,
@@ -100,13 +113,12 @@ CREATE TABLE cenario_concorrencia (
     id_usuario INTEGER NOT NULL,
     id_categoria INTEGER NULL,
     FOREIGN KEY (id_usuario) REFERENCES usuario (id_usuario),
-    FOREIGN KEY (id_categoria) REFERENCES categoria (id_categoria),
-    CONSTRAINT chk_cenario_impacto CHECK (percentual_impacto BETWEEN 0 AND 100)
+    FOREIGN KEY (id_categoria) REFERENCES categoria (id_categoria)
 );
 
 CREATE TABLE relatorio (
     id_relatorio INTEGER PRIMARY KEY AUTOINCREMENT,
-    tipo TEXT NOT NULL,
+    tipo TEXT NOT NULL, -- REGIONAL, CATEGORIA_PERIODO, TENDENCIA ou CENARIO
     periodo_inicio TEXT NOT NULL,
     periodo_fim TEXT NOT NULL,
     limiar_tendencia NUMERIC NULL,
@@ -126,11 +138,11 @@ CREATE TABLE relatorio (
 
 CREATE TABLE item_relatorio (
     id_item INTEGER PRIMARY KEY AUTOINCREMENT,
-    id_cidade INTEGER NULL,
+    id_cidade INTEGER NULL, -- cidade comparada no relatorio REGIONAL
     quantidade INTEGER NOT NULL,
     faturamento NUMERIC NOT NULL,
     variacao_percentual NUMERIC NULL,
-    tendencia TEXT NULL,
+    tendencia TEXT NULL, -- ALTA, QUEDA ou ESTAVEL
     id_relatorio INTEGER NOT NULL,
     id_categoria INTEGER NULL,
     FOREIGN KEY (id_relatorio) REFERENCES relatorio (id_relatorio),
@@ -143,7 +155,7 @@ CREATE TABLE entrevista (
     id_entrevista INTEGER PRIMARY KEY AUTOINCREMENT,
     data TEXT NOT NULL,
     resumo TEXT NOT NULL,
-    achou_algo_novo TEXT NOT NULL,
+    achou_algo_novo TEXT NOT NULL, -- SIM ou NAO
     id_confeccao INTEGER NOT NULL,
     id_categoria_percebida INTEGER NULL,
     FOREIGN KEY (id_confeccao) REFERENCES confeccao (id_confeccao),
@@ -152,21 +164,22 @@ CREATE TABLE entrevista (
     CONSTRAINT chk_entrevista_novo CHECK (achou_algo_novo IN ('SIM','NAO'))
 );
 
+-- Historico (auditoria) de lancamentos, preenchido pelos triggers (RN11). Sem FKs, como no MySQL.
 CREATE TABLE historico_lancamento (
     id_historico INTEGER PRIMARY KEY AUTOINCREMENT,
     id_lancamento INTEGER NOT NULL,
-    acao TEXT NOT NULL,
-    origem TEXT NOT NULL,
+    acao TEXT NOT NULL, -- UPDATE ou DELETE
+    origem TEXT NOT NULL, -- MANUAL ou IMPORTACAO, do lancamento alterado
     mes_referencia TEXT NOT NULL,
     id_confeccao INTEGER NOT NULL,
     id_categoria INTEGER NOT NULL,
     quantidade_antiga INTEGER NOT NULL,
     faturamento_antigo NUMERIC NOT NULL,
     status_antigo TEXT NOT NULL,
-    quantidade_nova INTEGER NULL,
+    quantidade_nova INTEGER NULL, -- NULL quando a acao e DELETE
     faturamento_novo NUMERIC NULL,
     status_novo TEXT NULL,
-    id_usuario INTEGER NULL,
+    id_usuario INTEGER NULL, -- quem alterou; no SQLite o back-end preenche
     data_alteracao TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT chk_hist_acao   CHECK (acao IN ('UPDATE','DELETE')),
     CONSTRAINT chk_hist_origem CHECK (origem IN ('MANUAL','IMPORTACAO'))
@@ -175,6 +188,7 @@ CREATE TABLE historico_lancamento (
 CREATE INDEX idx_historico_lancamento ON historico_lancamento (id_lancamento, data_alteracao);
 CREATE INDEX idx_historico_data ON historico_lancamento (data_alteracao, origem);
 
+-- Historico de lancamento (RN11): mesmos triggers do triggers.sql
 CREATE TRIGGER trg_historico_lancamento_update
 AFTER UPDATE ON lancamento_mensal
 FOR EACH ROW
@@ -221,6 +235,7 @@ INNER JOIN categoria cat ON l.id_categoria = cat.id_categoria
 INNER JOIN cidade ci     ON c.id_cidade = ci.id_cidade
 WHERE l.lanc_status = 'ATIVO';
 
+-- Mesma view do auditoria.sql
 CREATE VIEW vw_historico_lancamento AS
 SELECT h.id_historico,
        h.data_alteracao,

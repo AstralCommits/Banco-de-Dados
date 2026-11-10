@@ -1,3 +1,5 @@
+# Testa o docker-compose.yml: sobe o MySQL, espera o healthcheck e confere
+# que o banco_completo.sql criou todas as tabelas com dados.
 name: Docker MySQL
 
 on:
@@ -15,6 +17,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Subir o banco com docker compose up -d
+        # --wait so termina quando o healthcheck fica healthy (carga inicial concluida)
         run: docker compose up -d --wait --wait-timeout 300
 
       - name: Conferir que as 11 tabelas existem
