@@ -8,6 +8,12 @@ Cada versão tem uma tag anotada no Git (`git tag -l -n9` lista todas).
 
 ## [Não lançado]
 
+### Adicionado
+- **DB-01 (#9):** `04_constraints_pedidos_lote.sql` com as tabelas `artesao`, `produto`, `empresa_cliente`, `pedido_corporativo` e `item_pedido_corporativo`. `CHECK (quantidade >= 5)` nos itens dos pedidos em lote, chaves estrangeiras `ON DELETE RESTRICT` entre empresas, pedidos, produtos e artesãos, validação de CNPJ (formato, unicidade e dígitos verificadores com a função `cnpj_valido`), bloqueio de itens em pedidos entregues ou cancelados, índices e a view `vw_pedido_corporativo`.
+- **DB-03 (#11):** `05_seed_produtos_pe.sql` com 10 mestres artesãos de Caruaru, Olinda, Cabo de Santo Agostinho e Recife, 30 produtos com descrição, técnica, material e foto, e pedidos de demonstração.
+- `teste_constraints_pedidos.sql` com 18 casos de teste das novas regras.
+- Versão SQLite das novas tabelas e `extensao.db` regenerado; o workflow do Docker passa a conferir 16 tabelas, 8 rotinas, 6 triggers, os testes e a carga.
+
 ### Alterado
 - **Incompatível (compatibilização com a API):** em `lancamento_mensal`, a coluna `fonte_dado` passa a se chamar `origem_dado` (VARCHAR(30)) e ganha a companheira `nome_fonte` (VARCHAR(200), padrão "Fonte não informada"), os mesmos nomes da entidade `LancamentoMensal` do Back-end. Sem isso o perfil `dev` da API (`ddl-auto: validate`) não sobe contra este banco. Procedure `inserir_lancamento`, view `vw_lancamentos`, versão SQLite e `extensao.db` acompanham a mudança.
 - Migração `database/migracoes/V0_4_0__origem_dado_nome_fonte.sql` para bancos já criados na v0.3.x.

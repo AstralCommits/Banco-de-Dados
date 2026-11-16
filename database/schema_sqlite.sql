@@ -251,3 +251,103 @@ LEFT JOIN confeccao c   ON h.id_confeccao = c.id_confeccao
 LEFT JOIN cidade ci     ON c.id_cidade = ci.id_cidade
 LEFT JOIN categoria cat ON h.id_categoria = cat.id_categoria
 LEFT JOIN usuario u     ON h.id_usuario = u.id_usuario;
+
+
+CREATE TABLE artesao (
+    id_artesao INTEGER PRIMARY KEY AUTOINCREMENT,
+    nome_artistico TEXT NOT NULL UNIQUE CHECK (length(nome_artistico) <= 100),
+    nome_civil TEXT NULL,
+    municipio TEXT NOT NULL,
+    uf TEXT NOT NULL DEFAULT 'PE' CHECK (uf = 'PE'),
+    ano_nascimento INTEGER NULL,
+    ano_falecimento INTEGER NULL,
+    tecnica_principal TEXT NOT NULL,
+    reconhecimento TEXT NULL,
+    biografia TEXT NOT NULL,
+    CHECK (ano_falecimento IS NULL OR ano_nascimento IS NULL OR ano_falecimento >= ano_nascimento)
+);
+
+CREATE TABLE produto (
+    id_produto INTEGER PRIMARY KEY AUTOINCREMENT,
+    nome TEXT NOT NULL,
+    descricao TEXT NOT NULL,
+    tecnica TEXT NOT NULL,
+    material TEXT NOT NULL,
+    municipio_origem TEXT NOT NULL,
+    preco_unitario NUMERIC NOT NULL CHECK (preco_unitario > 0),
+    foto_url TEXT NOT NULL,
+    prod_status TEXT NOT NULL DEFAULT 'ATIVO' CHECK (prod_status IN ('ATIVO','INATIVO')),
+    id_artesao INTEGER NOT NULL REFERENCES artesao (id_artesao) ON DELETE RESTRICT ON UPDATE CASCADE,
+    UNIQUE (id_artesao, nome)
+);
+
+CREATE TABLE empresa_cliente (
+    id_empresa INTEGER PRIMARY KEY AUTOINCREMENT,
+    razao_social TEXT NOT NULL,
+    nome_fantasia TEXT NULL,
+    cnpj TEXT NOT NULL UNIQUE CHECK (length(cnpj) = 14 AND cnpj NOT GLOB '*[^0-9]*'),
+    email TEXT NOT NULL CHECK (email LIKE '%_@_%._%'),
+    telefone TEXT NULL,
+    municipio TEXT NOT NULL,
+    uf TEXT NOT NULL CHECK (length(uf) = 2),
+    data_cadastro TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE pedido_corporativo (
+    id_pedido INTEGER PRIMARY KEY AUTOINCREMENT,
+    data_pedido TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    prazo_entrega TEXT NULL,
+    ped_status TEXT NOT NULL DEFAULT 'ORCAMENTO'
+        CHECK (ped_status IN ('ORCAMENTO','CONFIRMADO','EM_PRODUCAO','ENTREGUE','CANCELADO')),
+    observacao TEXT NULL,
+    id_empresa INTEGER NOT NULL REFERENCES empresa_cliente (id_empresa) ON DELETE RESTRICT ON UPDATE CASCADE,
+    id_usuario INTEGER NULL REFERENCES usuario (id_usuario) ON DELETE RESTRICT ON UPDATE CASCADE,
+    CHECK (prazo_entrega IS NULL OR prazo_entrega >= date(data_pedido))
+);
+
+CREATE TABLE item_pedido_corporativo (
+    id_item_pedido INTEGER PRIMARY KEY AUTOINCREMENT,
+    quantidade INTEGER NOT NULL CHECK (quantidade >= 5),
+    preco_unitario NUMERIC NOT NULL CHECK (preco_unitario > 0),
+    id_pedido INTEGER NOT NULL REFERENCES pedido_corporativo (id_pedido) ON DELETE CASCADE ON UPDATE CASCADE,
+    id_produto INTEGER NOT NULL REFERENCES produto (id_produto) ON DELETE RESTRICT ON UPDATE CASCADE,
+    UNIQUE (id_pedido, id_produto)
+);
+
+CREATE INDEX idx_produto_artesao ON produto (id_artesao, prod_status);
+CREATE INDEX idx_produto_municipio_tecnica ON produto (municipio_origem, tecnica);
+CREATE INDEX idx_pedido_empresa_status ON pedido_corporativo (id_empresa, ped_status, data_pedido);
+CREATE INDEX idx_item_pedido_produto ON item_pedido_corporativo (id_produto);
+
+CREATE TRIGGER trg_item_pedido_insert
+BEFORE INSERT ON item_pedido_corporativo
+FOR EACH ROW
+WHEN (SELECT ped_status FROM pedido_corporativo WHERE id_pedido = NEW.id_pedido) IN ('ENTREGUE','CANCELADO')
+  OR (SELECT prod_status FROM produto WHERE id_produto = NEW.id_produto) = 'INATIVO'
+BEGIN
+    SELECT RAISE(ABORT, 'Pedido entregue/cancelado ou produto inativo nao aceita novos itens.');
+END;
+
+CREATE TRIGGER trg_item_pedido_update
+BEFORE UPDATE ON item_pedido_corporativo
+FOR EACH ROW
+WHEN (SELECT ped_status FROM pedido_corporativo WHERE id_pedido = NEW.id_pedido) IN ('ENTREGUE','CANCELADO')
+BEGIN
+    SELECT RAISE(ABORT, 'Pedido entregue ou cancelado nao pode ter itens alterados.');
+END;
+
+CREATE VIEW vw_pedido_corporativo AS
+SELECT p.id_pedido,
+       p.data_pedido,
+       p.prazo_entrega,
+       p.ped_status,
+       e.id_empresa,
+       e.razao_social,
+       e.cnpj,
+       COUNT(i.id_item_pedido) AS total_itens,
+       COALESCE(SUM(i.quantidade), 0) AS total_pecas,
+       COALESCE(SUM(i.quantidade * i.preco_unitario), 0) AS valor_total
+FROM pedido_corporativo p
+INNER JOIN empresa_cliente e ON p.id_empresa = e.id_empresa
+LEFT JOIN item_pedido_corporativo i ON i.id_pedido = p.id_pedido
+GROUP BY p.id_pedido;
