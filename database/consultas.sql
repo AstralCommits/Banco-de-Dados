@@ -63,6 +63,16 @@ FROM log_lancamento l
 LEFT JOIN lancamento_mensal lm ON lm.id_lancamento = l.id_lancamento
 ORDER BY l.data_log, l.id_log;
 
+SELECT h.id, p.nome AS produto, c.nome AS artesao,
+       h.preco_anterior, h.preco_novo,
+       ROUND((h.preco_novo - h.preco_anterior) / h.preco_anterior * 100, 2) AS variacao_percentual,
+       h.justificativa, u.nome AS alterado_por, h.data_alteracao
+FROM historico_preco_produto h
+INNER JOIN produto p   ON p.id_produto = h.produto_id
+INNER JOIN confeccao c ON c.id_confeccao = p.id_confeccao
+LEFT JOIN usuario u    ON u.id_usuario = h.alterado_por
+ORDER BY h.data_alteracao, h.id;
+
 SELECT municipio, uf, faturamento_total, volume_itens, qtd_pedidos, ticket_medio_item
 FROM vw_vendas_polo_regional
 WHERE polo_destaque = 1

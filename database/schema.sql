@@ -189,6 +189,32 @@ CREATE TABLE avaliacoes_artesao (
     INDEX idx_avaliacoes_artesao (artesao_id)
 );
 
+CREATE TABLE produto (
+    id_produto INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    nome VARCHAR(120) NOT NULL,
+    preco DECIMAL(10,2) NOT NULL,
+    justificativa_preco VARCHAR(255) NULL,
+    id_confeccao INT NOT NULL,
+    FOREIGN KEY (id_confeccao) REFERENCES confeccao (id_confeccao),
+    CONSTRAINT chk_produto_preco CHECK (preco >= 0)
+);
+
+CREATE TABLE historico_preco_produto (
+    id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    produto_id INT NOT NULL,
+    preco_anterior DECIMAL(10,2) NOT NULL,
+    preco_novo DECIMAL(10,2) NOT NULL,
+    justificativa VARCHAR(255) NULL,
+    alterado_por INT NULL,
+    usuario_mysql VARCHAR(100) NULL,
+    data_alteracao DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_hist_preco_produto_data (produto_id, data_alteracao),
+    FOREIGN KEY (produto_id) REFERENCES produto (id_produto) ON DELETE RESTRICT,
+    FOREIGN KEY (alterado_por) REFERENCES usuario (id_usuario) ON DELETE RESTRICT,
+    CONSTRAINT chk_hist_preco_diferente CHECK (preco_anterior <> preco_novo),
+    CONSTRAINT chk_hist_preco_valores CHECK (preco_anterior >= 0 AND preco_novo >= 0)
+);
+
 CREATE OR REPLACE VIEW vw_lancamentos AS
 SELECT l.id_lancamento,
        l.mes_referencia,

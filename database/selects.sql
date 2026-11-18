@@ -12,6 +12,8 @@ SELECT * FROM item_relatorio;
 SELECT * FROM entrevista;
 SELECT * FROM pedido;
 SELECT * FROM avaliacoes_artesao;
+SELECT * FROM produto;
+SELECT * FROM historico_preco_produto;
 
 SELECT
     (SELECT COUNT(*) FROM cidade)            AS total_cidades,

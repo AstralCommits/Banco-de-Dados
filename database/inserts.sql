@@ -173,3 +173,10 @@ INSERT INTO avaliacoes_artesao
 (id, pedido_id, artesao_id, nota, comentario, data_avaliacao) VALUES
 (1, 1, 3, 5, 'Pecas dentro do prazo e com acabamento excelente.', '2026-02-10 09:00:00'),
 (2, 2, 3, 4, 'Boa qualidade, pequeno atraso na entrega.', '2026-02-18 14:10:00');
+
+INSERT INTO produto (id_produto, nome, preco, id_confeccao) VALUES
+(1, 'Camiseta bordada a mao', 80.00, 3),
+(2, 'Bolsa de palha trancada', 120.00, 9),
+(3, 'Vestido de renda', 250.00, 8),
+(4, 'Bermuda jeans lavada', 95.00, 6),
+(5, 'Blusa de croche', 70.00, 7);

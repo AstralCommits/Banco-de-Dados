@@ -189,6 +189,32 @@ CREATE TABLE avaliacoes_artesao (
     INDEX idx_avaliacoes_artesao (artesao_id)
 );
 
+CREATE TABLE produto (
+    id_produto INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    nome VARCHAR(120) NOT NULL,
+    preco DECIMAL(10,2) NOT NULL,
+    justificativa_preco VARCHAR(255) NULL,
+    id_confeccao INT NOT NULL,
+    FOREIGN KEY (id_confeccao) REFERENCES confeccao (id_confeccao),
+    CONSTRAINT chk_produto_preco CHECK (preco >= 0)
+);
+
+CREATE TABLE historico_preco_produto (
+    id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    produto_id INT NOT NULL,
+    preco_anterior DECIMAL(10,2) NOT NULL,
+    preco_novo DECIMAL(10,2) NOT NULL,
+    justificativa VARCHAR(255) NULL,
+    alterado_por INT NULL,
+    usuario_mysql VARCHAR(100) NULL,
+    data_alteracao DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_hist_preco_produto_data (produto_id, data_alteracao),
+    FOREIGN KEY (produto_id) REFERENCES produto (id_produto) ON DELETE RESTRICT,
+    FOREIGN KEY (alterado_por) REFERENCES usuario (id_usuario) ON DELETE RESTRICT,
+    CONSTRAINT chk_hist_preco_diferente CHECK (preco_anterior <> preco_novo),
+    CONSTRAINT chk_hist_preco_valores CHECK (preco_anterior >= 0 AND preco_novo >= 0)
+);
+
 CREATE OR REPLACE VIEW vw_lancamentos AS
 SELECT l.id_lancamento,
        l.mes_referencia,
@@ -428,6 +454,13 @@ INSERT INTO avaliacoes_artesao
 (1, 1, 3, 5, 'Pecas dentro do prazo e com acabamento excelente.', '2026-02-10 09:00:00'),
 (2, 2, 3, 4, 'Boa qualidade, pequeno atraso na entrega.', '2026-02-18 14:10:00');
 
+INSERT INTO produto (id_produto, nome, preco, id_confeccao) VALUES
+(1, 'Camiseta bordada a mao', 80.00, 3),
+(2, 'Bolsa de palha trancada', 120.00, 9),
+(3, 'Vestido de renda', 250.00, 8),
+(4, 'Bermuda jeans lavada', 95.00, 6),
+(5, 'Blusa de croche', 70.00, 7);
+
 DROP PROCEDURE IF EXISTS inserir_lancamento;
 DROP PROCEDURE IF EXISTS atualizar_lancamento;
 DROP PROCEDURE IF EXISTS cancelar_lancamento;
@@ -567,6 +600,7 @@ DELIMITER ;
 DROP TRIGGER IF EXISTS trg_log_lancamento_update;
 DROP TRIGGER IF EXISTS trg_log_lancamento_delete;
 DROP TRIGGER IF EXISTS trg_avaliacao_pedido_entregue;
+DROP TRIGGER IF EXISTS trg_audita_preco_produto;
 
 DELIMITER $$
 CREATE TRIGGER trg_log_lancamento_update
@@ -608,6 +642,35 @@ BEGIN
 END $$
 DELIMITER ;
 
+DELIMITER $$
+CREATE TRIGGER trg_audita_preco_produto
+BEFORE UPDATE ON produto
+FOR EACH ROW
+BEGIN
+    IF OLD.preco <> NEW.preco THEN
+        IF NEW.preco < 0 THEN
+            SIGNAL SQLSTATE '45000'
+                SET MESSAGE_TEXT = 'Preco nao pode ser negativo.';
+        END IF;
+
+        IF OLD.preco > 0
+           AND NEW.preco > OLD.preco * 3
+           AND (NEW.justificativa_preco IS NULL OR TRIM(NEW.justificativa_preco) = '') THEN
+            SIGNAL SQLSTATE '45000'
+                SET MESSAGE_TEXT = 'Acrescimo acima de 200% exige justificativa.';
+        END IF;
+
+        INSERT INTO historico_preco_produto
+        (produto_id, preco_anterior, preco_novo, justificativa, alterado_por, usuario_mysql)
+        VALUES
+        (OLD.id_produto, OLD.preco, NEW.preco, NULLIF(TRIM(NEW.justificativa_preco), ''),
+         @id_usuario_logado, CURRENT_USER());
+    END IF;
+
+    SET NEW.justificativa_preco = NULL;
+END $$
+DELIMITER ;
+
 CALL inserir_lancamento('2026-03-15', 360, 25200.00, 4, 4);
 SET @id_novo = LAST_INSERT_ID();
 SELECT * FROM lancamento_mensal WHERE id_lancamento = @id_novo;
@@ -615,6 +678,11 @@ CALL atualizar_lancamento(10, 350, 24500.00);
 CALL cancelar_lancamento(8);
 CALL excluir_lancamento(@id_novo);
 SELECT * FROM log_lancamento;
+
+SET @id_usuario_logado = 4;
+UPDATE produto SET preco = 95.00 WHERE id_produto = 1;
+SELECT * FROM historico_preco_produto;
+SET @id_usuario_logado = NULL;
 
 START TRANSACTION;
 
@@ -689,6 +757,97 @@ VALUES ('TENDENCIA', '2025-01-01', '2025-03-31', 5.00, 2);
 ROLLBACK;
 SELECT * FROM relatorio;
 
+DROP PROCEDURE IF EXISTS teste_trigger_audita_preco;
+
+DELIMITER $$
+CREATE PROCEDURE teste_trigger_audita_preco()
+BEGIN
+    DECLARE v_id INT;
+    DECLARE v_erro VARCHAR(255);
+    DECLARE v_qtd INT;
+    DECLARE v_anterior DECIMAL(10,2);
+    DECLARE v_novo DECIMAL(10,2);
+    DECLARE v_data DATETIME;
+    DECLARE v_autor INT;
+    DECLARE v_preco DECIMAL(10,2);
+    DECLARE v_just VARCHAR(255);
+
+    DECLARE CONTINUE HANDLER FOR SQLEXCEPTION
+    BEGIN
+        GET DIAGNOSTICS CONDITION 1 v_erro = MESSAGE_TEXT;
+    END;
+
+    DROP TEMPORARY TABLE IF EXISTS resultado_teste;
+    CREATE TEMPORARY TABLE resultado_teste (
+        teste INT,
+        descricao VARCHAR(120),
+        resultado VARCHAR(4)
+    ) ENGINE = MEMORY;
+
+    START TRANSACTION;
+
+    INSERT INTO produto (nome, preco, id_confeccao)
+    VALUES ('Produto de teste', 80.00, 3);
+    SET v_id = LAST_INSERT_ID();
+    SET @id_usuario_logado = 4;
+
+    UPDATE produto SET preco = 95.00 WHERE id_produto = v_id;
+    SELECT COUNT(*), MAX(preco_anterior), MAX(preco_novo), MAX(data_alteracao), MAX(alterado_por)
+      INTO v_qtd, v_anterior, v_novo, v_data, v_autor
+    FROM historico_preco_produto WHERE produto_id = v_id;
+    INSERT INTO resultado_teste VALUES
+    (1, 'R$ 80,00 para R$ 95,00 grava 1 linha com valores, autor e data',
+     IF(v_qtd = 1 AND v_anterior = 80.00 AND v_novo = 95.00
+        AND v_data IS NOT NULL AND v_autor = 4, 'OK', 'FALHA'));
+
+    UPDATE produto SET nome = 'Produto de teste renomeado', preco = 95.00
+    WHERE id_produto = v_id;
+    SELECT COUNT(*) INTO v_qtd FROM historico_preco_produto WHERE produto_id = v_id;
+    INSERT INTO resultado_teste VALUES
+    (2, 'Atualizar sem mudar o preco nao grava historico',
+     IF(v_qtd = 1, 'OK', 'FALHA'));
+
+    SET v_erro = NULL;
+    UPDATE produto SET preco = -10.00 WHERE id_produto = v_id;
+    SELECT preco INTO v_preco FROM produto WHERE id_produto = v_id;
+    SELECT COUNT(*) INTO v_qtd FROM historico_preco_produto WHERE produto_id = v_id;
+    INSERT INTO resultado_teste VALUES
+    (3, 'Preco negativo e bloqueado, preco e historico ficam intactos',
+     IF(v_erro = 'Preco nao pode ser negativo.' AND v_preco = 95.00 AND v_qtd = 1,
+        'OK', 'FALHA'));
+
+    SET v_erro = NULL;
+    UPDATE produto SET preco = 285.01 WHERE id_produto = v_id;
+    SELECT preco INTO v_preco FROM produto WHERE id_produto = v_id;
+    SELECT COUNT(*) INTO v_qtd FROM historico_preco_produto WHERE produto_id = v_id;
+    SET @bloqueou_sem_justificativa =
+        (v_erro = 'Acrescimo acima de 200% exige justificativa.' AND v_preco = 95.00 AND v_qtd = 1);
+
+    SET v_erro = NULL;
+    UPDATE produto SET preco = 285.00 WHERE id_produto = v_id;
+    SELECT COUNT(*) INTO v_qtd FROM historico_preco_produto WHERE produto_id = v_id;
+    SET @limite_exato_liberado = (v_erro IS NULL AND v_qtd = 2);
+
+    UPDATE produto SET preco = 1000.00, justificativa_preco = 'Edicao limitada de colecao'
+    WHERE id_produto = v_id;
+    SELECT COUNT(*), MAX(justificativa) INTO v_qtd, v_just
+    FROM historico_preco_produto WHERE produto_id = v_id;
+    INSERT INTO resultado_teste VALUES
+    (4, 'Acrescimo acima de 200%: bloqueia sem justificativa, aceita no limite e com justificativa',
+     IF(@bloqueou_sem_justificativa AND @limite_exato_liberado
+        AND v_qtd = 3 AND v_just = 'Edicao limitada de colecao', 'OK', 'FALHA'));
+
+    ROLLBACK;
+    SET @id_usuario_logado = NULL;
+
+    SELECT teste, descricao, resultado FROM resultado_teste ORDER BY teste;
+    DROP TEMPORARY TABLE resultado_teste;
+END $$
+DELIMITER ;
+
+CALL teste_trigger_audita_preco();
+DROP PROCEDURE teste_trigger_audita_preco;
+
 SELECT * FROM cidade;
 SELECT * FROM confeccao;
 SELECT * FROM usuario;
@@ -701,6 +860,8 @@ SELECT * FROM item_relatorio;
 SELECT * FROM entrevista;
 SELECT * FROM pedido;
 SELECT * FROM avaliacoes_artesao;
+SELECT * FROM produto;
+SELECT * FROM historico_preco_produto;
 
 SELECT
     (SELECT COUNT(*) FROM cidade)            AS total_cidades,
@@ -859,6 +1020,16 @@ SELECT l.id_log, l.id_lancamento, l.acao,
 FROM log_lancamento l
 LEFT JOIN lancamento_mensal lm ON lm.id_lancamento = l.id_lancamento
 ORDER BY l.data_log, l.id_log;
+
+SELECT h.id, p.nome AS produto, c.nome AS artesao,
+       h.preco_anterior, h.preco_novo,
+       ROUND((h.preco_novo - h.preco_anterior) / h.preco_anterior * 100, 2) AS variacao_percentual,
+       h.justificativa, u.nome AS alterado_por, h.data_alteracao
+FROM historico_preco_produto h
+INNER JOIN produto p   ON p.id_produto = h.produto_id
+INNER JOIN confeccao c ON c.id_confeccao = p.id_confeccao
+LEFT JOIN usuario u    ON u.id_usuario = h.alterado_por
+ORDER BY h.data_alteracao, h.id;
 
 SELECT municipio, uf, faturamento_total, volume_itens, qtd_pedidos, ticket_medio_item
 FROM vw_vendas_polo_regional
