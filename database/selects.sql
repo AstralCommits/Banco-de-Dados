@@ -104,3 +104,6 @@ ORDER BY uf, confeccao, mes_referencia;
 
 SELECT * FROM vw_reputacao_artesao
 ORDER BY nota_media DESC;
+
+SELECT * FROM vw_vendas_polo_regional
+ORDER BY faturamento_total DESC;

@@ -62,3 +62,43 @@ SELECT l.id_log, l.id_lancamento, l.acao,
 FROM log_lancamento l
 LEFT JOIN lancamento_mensal lm ON lm.id_lancamento = l.id_lancamento
 ORDER BY l.data_log, l.id_log;
+
+SELECT municipio, uf, faturamento_total, volume_itens, qtd_pedidos, ticket_medio_item
+FROM vw_vendas_polo_regional
+WHERE polo_destaque = 1
+ORDER BY faturamento_total DESC;
+
+SELECT SUM(faturamento_total) AS faturamento_polos,
+       SUM(volume_itens)      AS itens_polos,
+       SUM(qtd_pedidos)       AS pedidos_polos
+FROM vw_vendas_polo_regional
+WHERE polo_destaque = 1;
+
+SELECT ci.nome AS municipio, COUNT(*) AS pedidos_no_periodo
+FROM pedido p
+INNER JOIN confeccao c ON c.id_confeccao = p.id_confeccao
+INNER JOIN cidade ci   ON ci.id_cidade = c.id_cidade
+WHERE p.data_pedido >= '2026-02-01' AND p.data_pedido < '2026-03-01'
+  AND p.ped_status <> 'CANCELADO'
+GROUP BY ci.id_cidade, ci.nome
+ORDER BY pedidos_no_periodo DESC;
+
+SHOW INDEX FROM pedido;
+SHOW INDEX FROM confeccao;
+SHOW INDEX FROM lancamento_mensal;
+
+EXPLAIN SELECT * FROM vw_vendas_polo_regional;
+
+EXPLAIN ANALYZE SELECT * FROM vw_vendas_polo_regional;
+
+EXPLAIN SELECT COUNT(*) FROM pedido
+WHERE data_pedido >= '2026-02-01' AND data_pedido < '2026-03-01';
+
+EXPLAIN ANALYZE
+SELECT ci.nome AS municipio, COUNT(*) AS pedidos_no_periodo
+FROM pedido p
+INNER JOIN confeccao c ON c.id_confeccao = p.id_confeccao
+INNER JOIN cidade ci   ON ci.id_cidade = c.id_cidade
+WHERE p.data_pedido >= '2026-02-01' AND p.data_pedido < '2026-03-01'
+  AND p.ped_status <> 'CANCELADO'
+GROUP BY ci.id_cidade, ci.nome;

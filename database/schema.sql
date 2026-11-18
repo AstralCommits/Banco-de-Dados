@@ -1,14 +1,16 @@
 DROP DATABASE IF EXISTS confeccoes;
- 
+
 CREATE DATABASE IF NOT EXISTS confeccoes CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
 USE confeccoes;
- 
+
 CREATE TABLE cidade (
     id_cidade INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     nome VARCHAR(80) NOT NULL,
-    uf CHAR(2) NOT NULL
+    uf CHAR(2) NOT NULL,
+    polo_destaque TINYINT(1) NOT NULL DEFAULT 0,
+    CONSTRAINT chk_cidade_polo CHECK (polo_destaque IN (0,1))
 );
- 
+
 CREATE TABLE confeccao (
     id_confeccao INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     nome VARCHAR(120) NOT NULL,
@@ -16,11 +18,12 @@ CREATE TABLE confeccao (
     porte VARCHAR(10) NOT NULL,
     tipo VARCHAR(10) NOT NULL,
     id_cidade INT NOT NULL,
+    INDEX idx_confeccao_cidade (id_cidade),
     FOREIGN KEY (id_cidade) REFERENCES cidade (id_cidade),
     CONSTRAINT chk_confeccao_porte CHECK (porte IN ('MICRO','PEQUENA','MEDIA')),
     CONSTRAINT chk_confeccao_tipo  CHECK (tipo IN ('CONFECCAO','FACCAO'))
 );
- 
+
 CREATE TABLE usuario (
     id_usuario INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     nome VARCHAR(100) NOT NULL,
@@ -35,12 +38,12 @@ CREATE TABLE usuario (
         OR (perfil = 'EMPRESARIO' AND id_confeccao IS NOT NULL)
     )
 );
- 
+
 CREATE TABLE categoria (
     id_categoria INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     nome VARCHAR(60) NOT NULL UNIQUE
 );
- 
+
 CREATE TABLE importacao (
     id_importacao INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     nome_arquivo VARCHAR(150) NOT NULL,
@@ -51,7 +54,7 @@ CREATE TABLE importacao (
     FOREIGN KEY (id_usuario) REFERENCES usuario (id_usuario),
     CONSTRAINT chk_imp_status CHECK (imp_status IN ('CONCLUIDA','ERRO'))
 );
- 
+
 CREATE TABLE lancamento_mensal (
     id_lancamento INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     mes_referencia DATE NOT NULL,
@@ -64,6 +67,7 @@ CREATE TABLE lancamento_mensal (
     id_importacao INT NULL,
     UNIQUE (id_confeccao, id_categoria, mes_referencia),
     INDEX idx_lanc_status_mes (lanc_status, mes_referencia),
+    INDEX idx_lanc_polo (lanc_status, id_confeccao, quantidade, faturamento),
     FOREIGN KEY (id_confeccao) REFERENCES confeccao (id_confeccao),
     FOREIGN KEY (id_categoria) REFERENCES categoria (id_categoria),
     FOREIGN KEY (id_importacao) REFERENCES importacao (id_importacao),
@@ -77,7 +81,7 @@ CREATE TABLE lancamento_mensal (
         OR (origem = 'MANUAL' AND id_importacao IS NULL)
     )
 );
- 
+
 CREATE TABLE cenario_concorrencia (
     id_cenario INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     nome VARCHAR(100) NOT NULL,
@@ -89,7 +93,7 @@ CREATE TABLE cenario_concorrencia (
     FOREIGN KEY (id_categoria) REFERENCES categoria (id_categoria),
     CONSTRAINT chk_cenario_impacto CHECK (percentual_impacto >= 0 AND percentual_impacto <= 100)
 );
- 
+
 CREATE TABLE relatorio (
     id_relatorio INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     tipo VARCHAR(20) NOT NULL,
@@ -108,7 +112,7 @@ CREATE TABLE relatorio (
         OR (tipo <> 'CENARIO' AND id_cenario IS NULL)
     )
 );
- 
+
 CREATE TABLE item_relatorio (
     id_item INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     uf CHAR(2) NULL,
@@ -123,7 +127,7 @@ CREATE TABLE item_relatorio (
     CONSTRAINT chk_item_uf CHECK (uf IS NULL OR uf IN ('PE','PB','AL')),
     CONSTRAINT chk_item_tendencia CHECK (tendencia IS NULL OR tendencia IN ('ALTA','QUEDA','ESTAVEL'))
 );
- 
+
 CREATE TABLE entrevista (
     id_entrevista INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     data DATE NOT NULL,
@@ -135,7 +139,7 @@ CREATE TABLE entrevista (
     FOREIGN KEY (id_categoria_percebida) REFERENCES categoria (id_categoria),
     CONSTRAINT chk_entrevista_novo CHECK (achou_algo_novo IN ('SIM','NAO'))
 );
- 
+
 CREATE TABLE log_lancamento (
     id_log INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     id_lancamento INT NOT NULL,
@@ -150,7 +154,7 @@ CREATE TABLE log_lancamento (
     data_log DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT chk_log_acao CHECK (acao IN ('UPDATE','DELETE'))
 );
- 
+
 CREATE TABLE pedido (
     id_pedido INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     data_pedido DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -158,6 +162,8 @@ CREATE TABLE pedido (
     data_entrega DATETIME NULL,
     id_usuario INT NOT NULL,
     id_confeccao INT NOT NULL,
+    INDEX idx_pedido_data (data_pedido),
+    INDEX idx_pedido_confeccao_status (id_confeccao, ped_status),
     FOREIGN KEY (id_usuario) REFERENCES usuario (id_usuario),
     FOREIGN KEY (id_confeccao) REFERENCES confeccao (id_confeccao),
     UNIQUE (id_pedido, id_confeccao),
@@ -167,7 +173,7 @@ CREATE TABLE pedido (
         OR (ped_status <> 'ENTREGUE' AND data_entrega IS NULL)
     )
 );
- 
+
 CREATE TABLE avaliacoes_artesao (
     id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     pedido_id INT NOT NULL,
@@ -182,7 +188,7 @@ CREATE TABLE avaliacoes_artesao (
         ON DELETE RESTRICT,
     INDEX idx_avaliacoes_artesao (artesao_id)
 );
- 
+
 CREATE OR REPLACE VIEW vw_lancamentos AS
 SELECT l.id_lancamento,
        l.mes_referencia,
@@ -201,7 +207,7 @@ INNER JOIN confeccao c   ON l.id_confeccao = c.id_confeccao
 INNER JOIN categoria cat ON l.id_categoria = cat.id_categoria
 INNER JOIN cidade ci     ON c.id_cidade = ci.id_cidade
 WHERE l.lanc_status = 'ATIVO';
- 
+
 CREATE OR REPLACE VIEW vw_reputacao_artesao AS
 SELECT c.id_confeccao AS artesao_id,
        c.nome AS artesao,
@@ -213,4 +219,37 @@ FROM confeccao c
 INNER JOIN cidade ci ON c.id_cidade = ci.id_cidade
 LEFT JOIN avaliacoes_artesao a ON a.artesao_id = c.id_confeccao
 GROUP BY c.id_confeccao, c.nome, ci.nome, ci.uf;
- 
+
+CREATE OR REPLACE VIEW vw_vendas_polo_regional AS
+SELECT ci.id_cidade AS municipio_id,
+       ci.nome AS municipio,
+       ci.uf,
+       ci.polo_destaque,
+       COALESCE(v.faturamento_total, 0) AS faturamento_total,
+       COALESCE(v.volume_itens, 0) AS volume_itens,
+       COALESCE(p.qtd_pedidos, 0) AS qtd_pedidos,
+       ROUND(COALESCE(v.faturamento_total, 0) / NULLIF(v.volume_itens, 0), 2) AS ticket_medio_item
+FROM cidade ci
+LEFT JOIN (
+    SELECT c.id_cidade,
+           SUM(x.faturamento) AS faturamento_total,
+           SUM(x.quantidade) AS volume_itens
+    FROM (
+        SELECT id_confeccao,
+               SUM(faturamento) AS faturamento,
+               SUM(quantidade) AS quantidade
+        FROM lancamento_mensal
+        WHERE lanc_status = 'ATIVO'
+        GROUP BY id_confeccao
+    ) x
+    INNER JOIN confeccao c ON c.id_confeccao = x.id_confeccao
+    GROUP BY c.id_cidade
+) v ON v.id_cidade = ci.id_cidade
+LEFT JOIN (
+    SELECT c.id_cidade,
+           COUNT(*) AS qtd_pedidos
+    FROM pedido pe
+    INNER JOIN confeccao c ON c.id_confeccao = pe.id_confeccao
+    WHERE pe.ped_status <> 'CANCELADO'
+    GROUP BY c.id_cidade
+) p ON p.id_cidade = ci.id_cidade;

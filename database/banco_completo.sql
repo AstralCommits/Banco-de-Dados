@@ -6,7 +6,9 @@ USE confeccoes;
 CREATE TABLE cidade (
     id_cidade INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     nome VARCHAR(80) NOT NULL,
-    uf CHAR(2) NOT NULL
+    uf CHAR(2) NOT NULL,
+    polo_destaque TINYINT(1) NOT NULL DEFAULT 0,
+    CONSTRAINT chk_cidade_polo CHECK (polo_destaque IN (0,1))
 );
 
 CREATE TABLE confeccao (
@@ -16,6 +18,7 @@ CREATE TABLE confeccao (
     porte VARCHAR(10) NOT NULL,
     tipo VARCHAR(10) NOT NULL,
     id_cidade INT NOT NULL,
+    INDEX idx_confeccao_cidade (id_cidade),
     FOREIGN KEY (id_cidade) REFERENCES cidade (id_cidade),
     CONSTRAINT chk_confeccao_porte CHECK (porte IN ('MICRO','PEQUENA','MEDIA')),
     CONSTRAINT chk_confeccao_tipo  CHECK (tipo IN ('CONFECCAO','FACCAO'))
@@ -64,6 +67,7 @@ CREATE TABLE lancamento_mensal (
     id_importacao INT NULL,
     UNIQUE (id_confeccao, id_categoria, mes_referencia),
     INDEX idx_lanc_status_mes (lanc_status, mes_referencia),
+    INDEX idx_lanc_polo (lanc_status, id_confeccao, quantidade, faturamento),
     FOREIGN KEY (id_confeccao) REFERENCES confeccao (id_confeccao),
     FOREIGN KEY (id_categoria) REFERENCES categoria (id_categoria),
     FOREIGN KEY (id_importacao) REFERENCES importacao (id_importacao),
@@ -158,6 +162,8 @@ CREATE TABLE pedido (
     data_entrega DATETIME NULL,
     id_usuario INT NOT NULL,
     id_confeccao INT NOT NULL,
+    INDEX idx_pedido_data (data_pedido),
+    INDEX idx_pedido_confeccao_status (id_confeccao, ped_status),
     FOREIGN KEY (id_usuario) REFERENCES usuario (id_usuario),
     FOREIGN KEY (id_confeccao) REFERENCES confeccao (id_confeccao),
     UNIQUE (id_pedido, id_confeccao),
@@ -214,11 +220,49 @@ INNER JOIN cidade ci ON c.id_cidade = ci.id_cidade
 LEFT JOIN avaliacoes_artesao a ON a.artesao_id = c.id_confeccao
 GROUP BY c.id_confeccao, c.nome, ci.nome, ci.uf;
 
-INSERT INTO cidade (id_cidade, nome, uf) VALUES
-(1, 'Recife', 'PE'),
-(2, 'Caruaru', 'PE'),
-(3, 'Joao Pessoa', 'PB'),
-(4, 'Maceio', 'AL');
+CREATE OR REPLACE VIEW vw_vendas_polo_regional AS
+SELECT ci.id_cidade AS municipio_id,
+       ci.nome AS municipio,
+       ci.uf,
+       ci.polo_destaque,
+       COALESCE(v.faturamento_total, 0) AS faturamento_total,
+       COALESCE(v.volume_itens, 0) AS volume_itens,
+       COALESCE(p.qtd_pedidos, 0) AS qtd_pedidos,
+       ROUND(COALESCE(v.faturamento_total, 0) / NULLIF(v.volume_itens, 0), 2) AS ticket_medio_item
+FROM cidade ci
+LEFT JOIN (
+    SELECT c.id_cidade,
+           SUM(x.faturamento) AS faturamento_total,
+           SUM(x.quantidade) AS volume_itens
+    FROM (
+        SELECT id_confeccao,
+               SUM(faturamento) AS faturamento,
+               SUM(quantidade) AS quantidade
+        FROM lancamento_mensal
+        WHERE lanc_status = 'ATIVO'
+        GROUP BY id_confeccao
+    ) x
+    INNER JOIN confeccao c ON c.id_confeccao = x.id_confeccao
+    GROUP BY c.id_cidade
+) v ON v.id_cidade = ci.id_cidade
+LEFT JOIN (
+    SELECT c.id_cidade,
+           COUNT(*) AS qtd_pedidos
+    FROM pedido pe
+    INNER JOIN confeccao c ON c.id_confeccao = pe.id_confeccao
+    WHERE pe.ped_status <> 'CANCELADO'
+    GROUP BY c.id_cidade
+) p ON p.id_cidade = ci.id_cidade;
+
+INSERT INTO cidade (id_cidade, nome, uf, polo_destaque) VALUES
+(1, 'Recife', 'PE', 0),
+(2, 'Caruaru', 'PE', 1),
+(3, 'Joao Pessoa', 'PB', 0),
+(4, 'Maceio', 'AL', 0),
+(5, 'Toritama', 'PE', 1),
+(6, 'Santa Cruz do Capibaribe', 'PE', 1),
+(7, 'Olinda', 'PE', 1),
+(8, 'Passira', 'PE', 1);
 
 INSERT INTO confeccao
 (id_confeccao, nome, cnpj, porte, tipo, id_cidade) VALUES
@@ -226,7 +270,11 @@ INSERT INTO confeccao
 (2, 'Estilo Agreste', '23456789000102', 'PEQUENA', 'CONFECCAO', 2),
 (3, 'Costura Nordeste', '34567890000103', 'MICRO', 'FACCAO', 2),
 (4, 'Paraiba Fashion', '45678901000104', 'PEQUENA', 'CONFECCAO', 3),
-(5, 'Alagoas Textil', '56789012000105', 'MEDIA', 'CONFECCAO', 4);
+(5, 'Alagoas Textil', '56789012000105', 'MEDIA', 'CONFECCAO', 4),
+(6, 'Jeans Toritama', '67890123000106', 'PEQUENA', 'CONFECCAO', 5),
+(7, 'Moda Santa Cruz', '78901234000107', 'MEDIA', 'CONFECCAO', 6),
+(8, 'Atelier Olinda', '89012345000108', 'MICRO', 'FACCAO', 7),
+(9, 'Passira Artesanal', '90123456000109', 'MICRO', 'FACCAO', 8);
 
 INSERT INTO usuario
 (id_usuario, nome, email, senha_hash, perfil, id_confeccao) VALUES
@@ -270,7 +318,19 @@ INSERT INTO lancamento_mensal
 (10, '2026-02-01', 340, 23800.00, 'MANUAL', 'ATIVO', 4, 4, NULL),
 
 (11, '2026-01-01', 390, 27300.00, 'MANUAL', 'ATIVO', 5, 5, NULL),
-(12, '2026-02-01', 420, 29400.00, 'MANUAL', 'ATIVO', 5, 5, NULL);
+(12, '2026-02-01', 420, 29400.00, 'MANUAL', 'ATIVO', 5, 5, NULL),
+
+(13, '2026-01-01', 520, 31200.00, 'MANUAL', 'ATIVO', 6, 2, NULL),
+(14, '2026-02-01', 610, 36600.00, 'MANUAL', 'ATIVO', 6, 2, NULL),
+
+(15, '2026-01-01', 480, 28800.00, 'MANUAL', 'ATIVO', 7, 1, NULL),
+(16, '2026-02-01', 530, 31800.00, 'MANUAL', 'ATIVO', 7, 1, NULL),
+
+(17, '2026-01-01', 90, 7200.00, 'MANUAL', 'ATIVO', 8, 3, NULL),
+(18, '2026-02-01', 110, 8800.00, 'MANUAL', 'ATIVO', 8, 3, NULL),
+
+(19, '2026-01-01', 60, 4800.00, 'MANUAL', 'ATIVO', 9, 3, NULL),
+(20, '2026-02-01', 75, 6000.00, 'MANUAL', 'ATIVO', 9, 3, NULL);
 
 INSERT INTO cenario_concorrencia
 (id_cenario, nome, percentual_impacto, descricao, id_usuario, id_categoria) VALUES
@@ -353,7 +413,15 @@ INSERT INTO pedido
 (id_pedido, data_pedido, ped_status, data_entrega, id_usuario, id_confeccao) VALUES
 (1, '2026-02-02 10:00:00', 'ENTREGUE', '2026-02-09 15:30:00', 2, 3),
 (2, '2026-02-10 11:20:00', 'ENTREGUE', '2026-02-17 09:00:00', 3, 3),
-(3, '2026-03-01 08:40:00', 'PENDENTE', NULL, 5, 1);
+(3, '2026-03-01 08:40:00', 'PENDENTE', NULL, 5, 1),
+(4, '2026-01-10 09:00:00', 'ENTREGUE', '2026-01-17 10:00:00', 2, 2),
+(5, '2026-01-20 14:00:00', 'ENTREGUE', '2026-01-28 16:00:00', 3, 6),
+(6, '2026-02-05 10:30:00', 'EM_TRANSITO', NULL, 2, 7),
+(7, '2026-02-12 08:15:00', 'ENTREGUE', '2026-02-20 11:00:00', 5, 8),
+(8, '2026-02-25 13:45:00', 'PENDENTE', NULL, 4, 9),
+(9, '2026-03-03 09:20:00', 'CANCELADO', NULL, 6, 6),
+(10, '2026-03-08 15:00:00', 'ENTREGUE', '2026-03-15 09:30:00', 2, 7),
+(11, '2026-03-10 10:10:00', 'ENTREGUE', '2026-03-18 14:00:00', 3, 2);
 
 INSERT INTO avaliacoes_artesao
 (id, pedido_id, artesao_id, nota, comentario, data_avaliacao) VALUES
@@ -726,6 +794,9 @@ ORDER BY uf, confeccao, mes_referencia;
 SELECT * FROM vw_reputacao_artesao
 ORDER BY nota_media DESC;
 
+SELECT * FROM vw_vendas_polo_regional
+ORDER BY faturamento_total DESC;
+
 SELECT c.nome AS confeccao, ci.nome AS cidade, ci.uf, u.nome AS usuario, u.email
 FROM confeccao c
 INNER JOIN cidade ci ON c.id_cidade = ci.id_cidade
@@ -788,3 +859,43 @@ SELECT l.id_log, l.id_lancamento, l.acao,
 FROM log_lancamento l
 LEFT JOIN lancamento_mensal lm ON lm.id_lancamento = l.id_lancamento
 ORDER BY l.data_log, l.id_log;
+
+SELECT municipio, uf, faturamento_total, volume_itens, qtd_pedidos, ticket_medio_item
+FROM vw_vendas_polo_regional
+WHERE polo_destaque = 1
+ORDER BY faturamento_total DESC;
+
+SELECT SUM(faturamento_total) AS faturamento_polos,
+       SUM(volume_itens)      AS itens_polos,
+       SUM(qtd_pedidos)       AS pedidos_polos
+FROM vw_vendas_polo_regional
+WHERE polo_destaque = 1;
+
+SELECT ci.nome AS municipio, COUNT(*) AS pedidos_no_periodo
+FROM pedido p
+INNER JOIN confeccao c ON c.id_confeccao = p.id_confeccao
+INNER JOIN cidade ci   ON ci.id_cidade = c.id_cidade
+WHERE p.data_pedido >= '2026-02-01' AND p.data_pedido < '2026-03-01'
+  AND p.ped_status <> 'CANCELADO'
+GROUP BY ci.id_cidade, ci.nome
+ORDER BY pedidos_no_periodo DESC;
+
+SHOW INDEX FROM pedido;
+SHOW INDEX FROM confeccao;
+SHOW INDEX FROM lancamento_mensal;
+
+EXPLAIN SELECT * FROM vw_vendas_polo_regional;
+
+EXPLAIN ANALYZE SELECT * FROM vw_vendas_polo_regional;
+
+EXPLAIN SELECT COUNT(*) FROM pedido
+WHERE data_pedido >= '2026-02-01' AND data_pedido < '2026-03-01';
+
+EXPLAIN ANALYZE
+SELECT ci.nome AS municipio, COUNT(*) AS pedidos_no_periodo
+FROM pedido p
+INNER JOIN confeccao c ON c.id_confeccao = p.id_confeccao
+INNER JOIN cidade ci   ON ci.id_cidade = c.id_cidade
+WHERE p.data_pedido >= '2026-02-01' AND p.data_pedido < '2026-03-01'
+  AND p.ped_status <> 'CANCELADO'
+GROUP BY ci.id_cidade, ci.nome;

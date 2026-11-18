@@ -1,10 +1,14 @@
 USE confeccoes;
 
-INSERT INTO cidade (id_cidade, nome, uf) VALUES
-(1, 'Recife', 'PE'),
-(2, 'Caruaru', 'PE'),
-(3, 'Joao Pessoa', 'PB'),
-(4, 'Maceio', 'AL');
+INSERT INTO cidade (id_cidade, nome, uf, polo_destaque) VALUES
+(1, 'Recife', 'PE', 0),
+(2, 'Caruaru', 'PE', 1),
+(3, 'Joao Pessoa', 'PB', 0),
+(4, 'Maceio', 'AL', 0),
+(5, 'Toritama', 'PE', 1),
+(6, 'Santa Cruz do Capibaribe', 'PE', 1),
+(7, 'Olinda', 'PE', 1),
+(8, 'Passira', 'PE', 1);
 
 INSERT INTO confeccao
 (id_confeccao, nome, cnpj, porte, tipo, id_cidade) VALUES
@@ -12,7 +16,11 @@ INSERT INTO confeccao
 (2, 'Estilo Agreste', '23456789000102', 'PEQUENA', 'CONFECCAO', 2),
 (3, 'Costura Nordeste', '34567890000103', 'MICRO', 'FACCAO', 2),
 (4, 'Paraiba Fashion', '45678901000104', 'PEQUENA', 'CONFECCAO', 3),
-(5, 'Alagoas Textil', '56789012000105', 'MEDIA', 'CONFECCAO', 4);
+(5, 'Alagoas Textil', '56789012000105', 'MEDIA', 'CONFECCAO', 4),
+(6, 'Jeans Toritama', '67890123000106', 'PEQUENA', 'CONFECCAO', 5),
+(7, 'Moda Santa Cruz', '78901234000107', 'MEDIA', 'CONFECCAO', 6),
+(8, 'Atelier Olinda', '89012345000108', 'MICRO', 'FACCAO', 7),
+(9, 'Passira Artesanal', '90123456000109', 'MICRO', 'FACCAO', 8);
 
 INSERT INTO usuario
 (id_usuario, nome, email, senha_hash, perfil, id_confeccao) VALUES
@@ -56,7 +64,19 @@ INSERT INTO lancamento_mensal
 (10, '2026-02-01', 340, 23800.00, 'MANUAL', 'ATIVO', 4, 4, NULL),
 
 (11, '2026-01-01', 390, 27300.00, 'MANUAL', 'ATIVO', 5, 5, NULL),
-(12, '2026-02-01', 420, 29400.00, 'MANUAL', 'ATIVO', 5, 5, NULL);
+(12, '2026-02-01', 420, 29400.00, 'MANUAL', 'ATIVO', 5, 5, NULL),
+
+(13, '2026-01-01', 520, 31200.00, 'MANUAL', 'ATIVO', 6, 2, NULL),
+(14, '2026-02-01', 610, 36600.00, 'MANUAL', 'ATIVO', 6, 2, NULL),
+
+(15, '2026-01-01', 480, 28800.00, 'MANUAL', 'ATIVO', 7, 1, NULL),
+(16, '2026-02-01', 530, 31800.00, 'MANUAL', 'ATIVO', 7, 1, NULL),
+
+(17, '2026-01-01', 90, 7200.00, 'MANUAL', 'ATIVO', 8, 3, NULL),
+(18, '2026-02-01', 110, 8800.00, 'MANUAL', 'ATIVO', 8, 3, NULL),
+
+(19, '2026-01-01', 60, 4800.00, 'MANUAL', 'ATIVO', 9, 3, NULL),
+(20, '2026-02-01', 75, 6000.00, 'MANUAL', 'ATIVO', 9, 3, NULL);
 
 INSERT INTO cenario_concorrencia
 (id_cenario, nome, percentual_impacto, descricao, id_usuario, id_categoria) VALUES
@@ -139,7 +159,15 @@ INSERT INTO pedido
 (id_pedido, data_pedido, ped_status, data_entrega, id_usuario, id_confeccao) VALUES
 (1, '2026-02-02 10:00:00', 'ENTREGUE', '2026-02-09 15:30:00', 2, 3),
 (2, '2026-02-10 11:20:00', 'ENTREGUE', '2026-02-17 09:00:00', 3, 3),
-(3, '2026-03-01 08:40:00', 'PENDENTE', NULL, 5, 1);
+(3, '2026-03-01 08:40:00', 'PENDENTE', NULL, 5, 1),
+(4, '2026-01-10 09:00:00', 'ENTREGUE', '2026-01-17 10:00:00', 2, 2),
+(5, '2026-01-20 14:00:00', 'ENTREGUE', '2026-01-28 16:00:00', 3, 6),
+(6, '2026-02-05 10:30:00', 'EM_TRANSITO', NULL, 2, 7),
+(7, '2026-02-12 08:15:00', 'ENTREGUE', '2026-02-20 11:00:00', 5, 8),
+(8, '2026-02-25 13:45:00', 'PENDENTE', NULL, 4, 9),
+(9, '2026-03-03 09:20:00', 'CANCELADO', NULL, 6, 6),
+(10, '2026-03-08 15:00:00', 'ENTREGUE', '2026-03-15 09:30:00', 2, 7),
+(11, '2026-03-10 10:10:00', 'ENTREGUE', '2026-03-18 14:00:00', 3, 2);
 
 INSERT INTO avaliacoes_artesao
 (id, pedido_id, artesao_id, nota, comentario, data_avaliacao) VALUES
