@@ -314,6 +314,7 @@ LEFT JOIN (
     GROUP BY c.id_cidade
 ) p ON p.id_cidade = ci.id_cidade;
 
+USE confeccoes;
 
 INSERT INTO cidade (id_cidade, nome, uf, polo_destaque) VALUES
 (1, 'Recife', 'PE', 0),
@@ -507,6 +508,7 @@ INSERT INTO pedido_item
 (7, 9, 4, 5, 95.00),
 (8, 10, 5, 8, 70.00);
 
+USE confeccoes;
 
 DROP PROCEDURE IF EXISTS inserir_lancamento;
 DROP PROCEDURE IF EXISTS atualizar_lancamento;
@@ -711,6 +713,7 @@ BEGIN
 END $$
 DELIMITER ;
 
+USE confeccoes;
 
 DROP TRIGGER IF EXISTS trg_log_lancamento_update;
 DROP TRIGGER IF EXISTS trg_log_lancamento_delete;
@@ -800,6 +803,7 @@ BEGIN
 END $$
 DELIMITER ;
 
+USE confeccoes;
 
 CALL inserir_lancamento('2026-03-15', 360, 25200.00, 4, 4);
 SET @id_novo = LAST_INSERT_ID();
@@ -1075,6 +1079,7 @@ DELIMITER ;
 CALL teste_fechamento_outubro();
 DROP PROCEDURE teste_fechamento_outubro;
 
+USE confeccoes;
 
 SELECT * FROM cidade;
 SELECT * FROM confeccao;
@@ -1155,6 +1160,8 @@ WHERE mes_referencia BETWEEN '2026-01-01' AND '2026-02-01';
 
 SELECT DISTINCT uf FROM cidade ORDER BY uf;
 
+USE confeccoes;
+
 SELECT uf,
        SUM(faturamento) AS faturamento_total,
        SUM(quantidade)  AS quantidade_total
@@ -1191,7 +1198,6 @@ ORDER BY nota_media DESC;
 
 SELECT * FROM vw_vendas_polo_regional
 ORDER BY faturamento_total DESC;
-
 
 SELECT c.nome AS confeccao, ci.nome AS cidade, ci.uf, u.nome AS usuario, u.email
 FROM confeccao c
@@ -1332,3 +1338,4 @@ INNER JOIN cidade ci   ON ci.id_cidade = c.id_cidade
 WHERE p.data_pedido >= '2026-02-01' AND p.data_pedido < '2026-03-01'
   AND p.ped_status <> 'CANCELADO'
 GROUP BY ci.id_cidade, ci.nome;
+

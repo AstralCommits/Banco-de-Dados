@@ -37,6 +37,7 @@ ORDER BY nota_media DESC;
 SELECT * FROM vw_vendas_polo_regional
 ORDER BY faturamento_total DESC;
 
+
 SELECT c.nome AS confeccao, ci.nome AS cidade, ci.uf, u.nome AS usuario, u.email
 FROM confeccao c
 INNER JOIN cidade ci ON c.id_cidade = ci.id_cidade
