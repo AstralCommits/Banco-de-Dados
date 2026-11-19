@@ -1,0 +1,5 @@
+
+scripts/backup.env
+backups/*.sql.gz
+backups/backup.log
+backups/.backup.lock*
