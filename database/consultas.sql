@@ -1,5 +1,42 @@
 USE confeccoes;
 
+SELECT uf,
+       SUM(faturamento) AS faturamento_total,
+       SUM(quantidade)  AS quantidade_total
+FROM vw_lancamentos
+GROUP BY uf
+ORDER BY faturamento_total DESC;
+
+SELECT categoria,
+       SUM(faturamento) AS faturamento_total,
+       SUM(quantidade)  AS quantidade_total
+FROM vw_lancamentos
+GROUP BY categoria
+ORDER BY faturamento_total DESC;
+
+SELECT mes_referencia,
+       SUM(faturamento) AS faturamento_total
+FROM vw_lancamentos
+GROUP BY mes_referencia
+ORDER BY mes_referencia;
+
+SELECT confeccao,
+       SUM(faturamento) AS faturamento_total,
+       SUM(quantidade)  AS quantidade_total
+FROM vw_lancamentos
+GROUP BY id_confeccao, confeccao
+HAVING SUM(faturamento) > 50000
+ORDER BY faturamento_total DESC;
+
+SELECT * FROM vw_lancamentos
+ORDER BY uf, confeccao, mes_referencia;
+
+SELECT * FROM vw_reputacao_artesao
+ORDER BY nota_media DESC;
+
+SELECT * FROM vw_vendas_polo_regional
+ORDER BY faturamento_total DESC;
+
 SELECT c.nome AS confeccao, ci.nome AS cidade, ci.uf, u.nome AS usuario, u.email
 FROM confeccao c
 INNER JOIN cidade ci ON c.id_cidade = ci.id_cidade
@@ -73,6 +110,31 @@ INNER JOIN confeccao c ON c.id_confeccao = p.id_confeccao
 LEFT JOIN usuario u    ON u.id_usuario = h.alterado_por
 ORDER BY h.data_alteracao, h.id;
 
+SELECT f.ano, f.mes, c.nome AS artesao, ci.nome AS cidade, ci.uf,
+       f.qtd_pedidos, f.valor_bruto, f.taxa_percentual,
+       f.valor_taxa, f.valor_liquido, f.fech_status, f.data_fechamento
+FROM fechamento_comissao f
+INNER JOIN confeccao c ON c.id_confeccao = f.id_confeccao
+INNER JOIN cidade ci   ON ci.id_cidade = c.id_cidade
+ORDER BY f.ano, f.mes, f.valor_liquido DESC;
+
+SELECT ano, mes,
+       SUM(qtd_pedidos)   AS pedidos,
+       SUM(valor_bruto)   AS bruto_total,
+       SUM(valor_taxa)    AS taxa_plataforma,
+       SUM(valor_liquido) AS liquido_a_repassar
+FROM fechamento_comissao
+GROUP BY ano, mes
+ORDER BY ano, mes;
+
+SELECT pe.id_confeccao,
+       SUM(pit.quantidade * pit.preco_unitario) AS bruto_pedidos
+FROM pedido pe
+INNER JOIN pedido_item pit ON pit.id_pedido = pe.id_pedido
+WHERE pe.ped_status = 'ENTREGUE'
+  AND pe.data_entrega >= '2026-02-01' AND pe.data_entrega < '2026-03-01'
+GROUP BY pe.id_confeccao;
+
 SELECT municipio, uf, faturamento_total, volume_itens, qtd_pedidos, ticket_medio_item
 FROM vw_vendas_polo_regional
 WHERE polo_destaque = 1
@@ -96,6 +158,8 @@ ORDER BY pedidos_no_periodo DESC;
 SHOW INDEX FROM pedido;
 SHOW INDEX FROM confeccao;
 SHOW INDEX FROM lancamento_mensal;
+SHOW INDEX FROM pedido_item;
+SHOW INDEX FROM fechamento_comissao;
 
 EXPLAIN SELECT * FROM vw_vendas_polo_regional;
 

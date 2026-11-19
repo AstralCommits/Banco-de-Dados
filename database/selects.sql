@@ -14,6 +14,8 @@ SELECT * FROM pedido;
 SELECT * FROM avaliacoes_artesao;
 SELECT * FROM produto;
 SELECT * FROM historico_preco_produto;
+SELECT * FROM pedido_item;
+SELECT * FROM fechamento_comissao;
 
 SELECT
     (SELECT COUNT(*) FROM cidade)            AS total_cidades,
@@ -23,7 +25,9 @@ SELECT
     (SELECT COUNT(*) FROM lancamento_mensal) AS total_lancamentos,
     (SELECT COUNT(*) FROM entrevista)        AS total_entrevistas,
     (SELECT COUNT(*) FROM pedido)            AS total_pedidos,
-    (SELECT COUNT(*) FROM avaliacoes_artesao) AS total_avaliacoes;
+    (SELECT COUNT(*) FROM avaliacoes_artesao) AS total_avaliacoes,
+    (SELECT COUNT(*) FROM pedido_item)       AS total_itens_pedido,
+    (SELECT COUNT(*) FROM fechamento_comissao) AS total_fechamentos;
 
 SELECT
     SUM(faturamento) AS faturamento_total,
@@ -47,7 +51,9 @@ SELECT 'lancamento.origem', origem, COUNT(*) FROM lancamento_mensal GROUP BY ori
 UNION ALL
 SELECT 'lancamento.status', lanc_status, COUNT(*) FROM lancamento_mensal GROUP BY lanc_status
 UNION ALL
-SELECT 'pedido.status', ped_status, COUNT(*) FROM pedido GROUP BY ped_status;
+SELECT 'pedido.status', ped_status, COUNT(*) FROM pedido GROUP BY ped_status
+UNION ALL
+SELECT 'fechamento.status', fech_status, COUNT(*) FROM fechamento_comissao GROUP BY fech_status;
 
 SELECT 'usuario sem confeccao' AS caso, COUNT(*) AS qtd FROM usuario WHERE id_confeccao IS NULL
 UNION ALL

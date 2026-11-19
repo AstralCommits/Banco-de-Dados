@@ -5,6 +5,7 @@ DROP PROCEDURE IF EXISTS atualizar_lancamento;
 DROP PROCEDURE IF EXISTS cancelar_lancamento;
 DROP PROCEDURE IF EXISTS excluir_lancamento;
 DROP PROCEDURE IF EXISTS gerar_relatorio_regional;
+DROP PROCEDURE IF EXISTS sp_fechamento_mensal_artesao;
 
 DELIMITER $$
 CREATE PROCEDURE inserir_lancamento(
@@ -133,5 +134,71 @@ BEGIN
 
     COMMIT;
     SELECT v_id_relatorio AS id_relatorio;
+END $$
+DELIMITER ;
+
+DELIMITER $$
+CREATE PROCEDURE sp_fechamento_mensal_artesao(
+    IN p_ano INT,
+    IN p_mes INT
+)
+BEGIN
+    DECLARE v_inicio DATE;
+    DECLARE v_fim DATE;
+    DECLARE v_taxa DECIMAL(5,2) DEFAULT 10.00;
+
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        ROLLBACK;
+        RESIGNAL;
+    END;
+
+    IF p_ano IS NULL OR p_mes IS NULL OR p_mes NOT BETWEEN 1 AND 12 OR p_ano < 2000 THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Ano ou mes invalido.';
+    END IF;
+
+    SET v_inicio = STR_TO_DATE(CONCAT(p_ano, '-', p_mes, '-01'), '%Y-%m-%d');
+    SET v_fim    = DATE_ADD(v_inicio, INTERVAL 1 MONTH);
+
+    IF EXISTS (SELECT 1 FROM fechamento_comissao WHERE ano = p_ano AND mes = p_mes) THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Mes ja fechado: fechamento nao pode ser repetido.';
+    END IF;
+
+    START TRANSACTION;
+
+    INSERT INTO fechamento_comissao
+    (ano, mes, id_confeccao, qtd_pedidos, valor_bruto, taxa_percentual,
+     valor_taxa, valor_liquido, fech_status)
+    SELECT p_ano, p_mes, t.id_confeccao, t.qtd_pedidos, t.bruto, v_taxa,
+           ROUND(t.bruto * v_taxa / 100, 2),
+           t.bruto - ROUND(t.bruto * v_taxa / 100, 2),
+           'A_PAGAR'
+    FROM (
+        SELECT pe.id_confeccao,
+               COUNT(DISTINCT pe.id_pedido) AS qtd_pedidos,
+               SUM(pit.quantidade * pit.preco_unitario) AS bruto
+        FROM pedido pe
+        INNER JOIN pedido_item pit ON pit.id_pedido = pe.id_pedido
+        WHERE pe.ped_status = 'ENTREGUE'
+          AND pe.data_entrega >= v_inicio
+          AND pe.data_entrega <  v_fim
+        GROUP BY pe.id_confeccao
+    ) t;
+
+    IF ROW_COUNT() = 0 THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Sem pedidos entregues no mes: fechamento nao gerado.';
+    END IF;
+
+    COMMIT;
+
+    SELECT c.nome AS artesao, f.qtd_pedidos, f.valor_bruto,
+           f.valor_taxa, f.valor_liquido, f.fech_status
+    FROM fechamento_comissao f
+    INNER JOIN confeccao c ON c.id_confeccao = f.id_confeccao
+    WHERE f.ano = p_ano AND f.mes = p_mes
+    ORDER BY f.valor_liquido DESC;
 END $$
 DELIMITER ;

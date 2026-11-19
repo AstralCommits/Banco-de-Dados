@@ -180,3 +180,14 @@ INSERT INTO produto (id_produto, nome, preco, id_confeccao) VALUES
 (3, 'Vestido de renda', 250.00, 8),
 (4, 'Bermuda jeans lavada', 95.00, 6),
 (5, 'Blusa de croche', 70.00, 7);
+
+INSERT INTO pedido_item
+(id_item_pedido, id_pedido, id_produto, quantidade, preco_unitario) VALUES
+(1, 1, 1, 3, 80.00),
+(2, 2, 1, 2, 80.00),
+(3, 5, 4, 10, 95.00),
+(4, 6, 5, 6, 70.00),
+(5, 7, 3, 2, 250.00),
+(6, 8, 2, 4, 120.00),
+(7, 9, 4, 5, 95.00),
+(8, 10, 5, 8, 70.00);

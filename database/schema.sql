@@ -215,6 +215,40 @@ CREATE TABLE historico_preco_produto (
     CONSTRAINT chk_hist_preco_valores CHECK (preco_anterior >= 0 AND preco_novo >= 0)
 );
 
+CREATE TABLE pedido_item (
+    id_item_pedido INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    id_pedido INT NOT NULL,
+    id_produto INT NOT NULL,
+    quantidade INT NOT NULL,
+    preco_unitario DECIMAL(10,2) NOT NULL,
+    INDEX idx_pedido_item_pedido (id_pedido),
+    FOREIGN KEY (id_pedido)  REFERENCES pedido (id_pedido)   ON DELETE RESTRICT,
+    FOREIGN KEY (id_produto) REFERENCES produto (id_produto) ON DELETE RESTRICT,
+    CONSTRAINT chk_pitem_quant CHECK (quantidade > 0),
+    CONSTRAINT chk_pitem_preco CHECK (preco_unitario >= 0)
+);
+
+CREATE TABLE fechamento_comissao (
+    id_fechamento INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    ano INT NOT NULL,
+    mes TINYINT NOT NULL,
+    id_confeccao INT NOT NULL,
+    qtd_pedidos INT NOT NULL,
+    valor_bruto DECIMAL(12,2) NOT NULL,
+    taxa_percentual DECIMAL(5,2) NOT NULL DEFAULT 10.00,
+    valor_taxa DECIMAL(12,2) NOT NULL,
+    valor_liquido DECIMAL(12,2) NOT NULL,
+    fech_status VARCHAR(10) NOT NULL DEFAULT 'A_PAGAR',
+    data_fechamento DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (ano, mes, id_confeccao),
+    INDEX idx_fech_status (fech_status, ano, mes),
+    FOREIGN KEY (id_confeccao) REFERENCES confeccao (id_confeccao) ON DELETE RESTRICT,
+    CONSTRAINT chk_fech_mes     CHECK (mes BETWEEN 1 AND 12),
+    CONSTRAINT chk_fech_status  CHECK (fech_status IN ('A_PAGAR','PAGO')),
+    CONSTRAINT chk_fech_valores CHECK (valor_bruto >= 0 AND valor_taxa >= 0 AND valor_liquido >= 0),
+    CONSTRAINT chk_fech_contabil CHECK (valor_bruto = valor_taxa + valor_liquido)
+);
+
 CREATE OR REPLACE VIEW vw_lancamentos AS
 SELECT l.id_lancamento,
        l.mes_referencia,

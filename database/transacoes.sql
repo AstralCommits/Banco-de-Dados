@@ -1,5 +1,18 @@
 USE confeccoes;
 
+CALL inserir_lancamento('2026-03-15', 360, 25200.00, 4, 4);
+SET @id_novo = LAST_INSERT_ID();
+SELECT * FROM lancamento_mensal WHERE id_lancamento = @id_novo;
+CALL atualizar_lancamento(10, 350, 24500.00);
+CALL cancelar_lancamento(8);
+CALL excluir_lancamento(@id_novo);
+SELECT * FROM log_lancamento;
+
+SET @id_usuario_logado = 4;
+UPDATE produto SET preco = 95.00 WHERE id_produto = 1;
+SELECT * FROM historico_preco_produto;
+SET @id_usuario_logado = NULL;
+
 START TRANSACTION;
 
 INSERT INTO importacao (nome_arquivo, qtd_linhas, imp_status, id_usuario)
@@ -72,6 +85,8 @@ VALUES ('TENDENCIA', '2025-01-01', '2025-03-31', 5.00, 2);
 
 ROLLBACK;
 SELECT * FROM relatorio;
+
+CALL sp_fechamento_mensal_artesao(2026, 2);
 
 DROP PROCEDURE IF EXISTS teste_trigger_audita_preco;
 
@@ -163,3 +178,98 @@ DELIMITER ;
 
 CALL teste_trigger_audita_preco();
 DROP PROCEDURE teste_trigger_audita_preco;
+
+DROP PROCEDURE IF EXISTS teste_fechamento_outubro;
+
+DELIMITER $$
+CREATE PROCEDURE teste_fechamento_outubro()
+BEGIN
+    DECLARE v_i INT DEFAULT 1;
+    DECLARE v_id INT;
+    DECLARE v_base INT DEFAULT NULL;
+    DECLARE v_pedidos INT;
+    DECLARE v_bruto DECIMAL(12,2);
+    DECLARE v_taxa DECIMAL(12,2);
+    DECLARE v_liq DECIMAL(12,2);
+    DECLARE v_extrato_ok INT;
+    DECLARE v_erro VARCHAR(255) DEFAULT NULL;
+
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        IF v_base IS NOT NULL THEN
+            DELETE FROM fechamento_comissao WHERE ano = 2026 AND mes = 10;
+            DELETE FROM pedido_item WHERE id_pedido > v_base;
+            DELETE FROM pedido WHERE id_pedido > v_base;
+        END IF;
+        RESIGNAL;
+    END;
+
+    IF EXISTS (SELECT 1 FROM fechamento_comissao WHERE ano = 2026 AND mes = 10) THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Teste exige outubro/2026 ainda nao fechado.';
+    END IF;
+
+    SELECT COALESCE(MAX(id_pedido), 0) INTO v_base FROM pedido;
+
+    WHILE v_i <= 15 DO
+        INSERT INTO pedido (data_pedido, ped_status, data_entrega, id_usuario, id_confeccao)
+        VALUES ('2026-10-05 10:00:00', 'ENTREGUE',
+                CONCAT('2026-10-', LPAD(v_i + 5, 2, '0'), ' 12:00:00'),
+                2, IF(v_i <= 10, 3, 9));
+        SET v_id = LAST_INSERT_ID();
+        INSERT INTO pedido_item (id_pedido, id_produto, quantidade, preco_unitario)
+        VALUES (v_id, IF(v_i <= 10, 1, 2), IF(v_i <= 10, 2, 1), IF(v_i <= 10, 80.00, 120.00));
+        SET v_i = v_i + 1;
+    END WHILE;
+
+    INSERT INTO pedido (data_pedido, ped_status, data_entrega, id_usuario, id_confeccao)
+    VALUES ('2026-10-20 10:00:00', 'CANCELADO', NULL, 2, 3);
+    SET v_id = LAST_INSERT_ID();
+    INSERT INTO pedido_item (id_pedido, id_produto, quantidade, preco_unitario)
+    VALUES (v_id, 1, 1, 80.00);
+
+    INSERT INTO pedido (data_pedido, ped_status, data_entrega, id_usuario, id_confeccao)
+    VALUES ('2026-10-28 10:00:00', 'ENTREGUE', '2026-11-03 10:00:00', 2, 3);
+    SET v_id = LAST_INSERT_ID();
+    INSERT INTO pedido_item (id_pedido, id_produto, quantidade, preco_unitario)
+    VALUES (v_id, 1, 1, 80.00);
+
+    CALL sp_fechamento_mensal_artesao(2026, 10);
+
+    SELECT qtd_pedidos, valor_bruto, valor_taxa, valor_liquido
+      INTO v_pedidos, v_bruto, v_taxa, v_liq
+    FROM fechamento_comissao
+    WHERE ano = 2026 AND mes = 10 AND id_confeccao = 3;
+
+    SELECT (COUNT(*) = 2
+            AND SUM(qtd_pedidos) = 15
+            AND SUM(valor_bruto) = 2200.00
+            AND SUM(valor_taxa) = 220.00
+            AND SUM(valor_liquido) = 1980.00
+            AND SUM(fech_status = 'A_PAGAR') = 2)
+      INTO v_extrato_ok
+    FROM fechamento_comissao
+    WHERE ano = 2026 AND mes = 10;
+
+    BEGIN
+        DECLARE CONTINUE HANDLER FOR SQLEXCEPTION
+        BEGIN
+            GET DIAGNOSTICS CONDITION 1 v_erro = MESSAGE_TEXT;
+        END;
+        CALL sp_fechamento_mensal_artesao(2026, 10);
+    END;
+
+    DELETE FROM fechamento_comissao WHERE ano = 2026 AND mes = 10;
+    DELETE FROM pedido_item WHERE id_pedido > v_base;
+    DELETE FROM pedido WHERE id_pedido > v_base;
+
+    SELECT IF(v_pedidos = 10 AND v_bruto = 1600.00 AND v_taxa = 160.00
+              AND v_liq = 1440.00 AND v_extrato_ok = 1, 'OK', 'FALHA')
+               AS resultado_fechamento_outubro,
+           IF(v_erro = 'Mes ja fechado: fechamento nao pode ser repetido.', 'OK', 'FALHA')
+               AS resultado_bloqueio_duplicidade;
+END $$
+DELIMITER ;
+
+CALL teste_fechamento_outubro();
+DROP PROCEDURE teste_fechamento_outubro;

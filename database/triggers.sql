@@ -4,6 +4,7 @@ DROP TRIGGER IF EXISTS trg_log_lancamento_update;
 DROP TRIGGER IF EXISTS trg_log_lancamento_delete;
 DROP TRIGGER IF EXISTS trg_avaliacao_pedido_entregue;
 DROP TRIGGER IF EXISTS trg_audita_preco_produto;
+DROP TRIGGER IF EXISTS trg_pedido_item_artesao;
 
 DELIMITER $$
 CREATE TRIGGER trg_log_lancamento_update
@@ -74,15 +75,15 @@ BEGIN
 END $$
 DELIMITER ;
 
-CALL inserir_lancamento('2026-03-15', 360, 25200.00, 4, 4);
-SET @id_novo = LAST_INSERT_ID();
-SELECT * FROM lancamento_mensal WHERE id_lancamento = @id_novo;
-CALL atualizar_lancamento(10, 350, 24500.00);
-CALL cancelar_lancamento(8);
-CALL excluir_lancamento(@id_novo);
-SELECT * FROM log_lancamento;
-
-SET @id_usuario_logado = 4;
-UPDATE produto SET preco = 95.00 WHERE id_produto = 1;
-SELECT * FROM historico_preco_produto;
-SET @id_usuario_logado = NULL;
+DELIMITER $$
+CREATE TRIGGER trg_pedido_item_artesao
+BEFORE INSERT ON pedido_item
+FOR EACH ROW
+BEGIN
+    IF (SELECT id_confeccao FROM produto WHERE id_produto = NEW.id_produto)
+       <> (SELECT id_confeccao FROM pedido WHERE id_pedido = NEW.id_pedido) THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Produto nao pertence ao artesao do pedido.';
+    END IF;
+END $$
+DELIMITER ;

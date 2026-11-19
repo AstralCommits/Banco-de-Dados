@@ -215,6 +215,40 @@ CREATE TABLE historico_preco_produto (
     CONSTRAINT chk_hist_preco_valores CHECK (preco_anterior >= 0 AND preco_novo >= 0)
 );
 
+CREATE TABLE pedido_item (
+    id_item_pedido INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    id_pedido INT NOT NULL,
+    id_produto INT NOT NULL,
+    quantidade INT NOT NULL,
+    preco_unitario DECIMAL(10,2) NOT NULL,
+    INDEX idx_pedido_item_pedido (id_pedido),
+    FOREIGN KEY (id_pedido)  REFERENCES pedido (id_pedido)   ON DELETE RESTRICT,
+    FOREIGN KEY (id_produto) REFERENCES produto (id_produto) ON DELETE RESTRICT,
+    CONSTRAINT chk_pitem_quant CHECK (quantidade > 0),
+    CONSTRAINT chk_pitem_preco CHECK (preco_unitario >= 0)
+);
+
+CREATE TABLE fechamento_comissao (
+    id_fechamento INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    ano INT NOT NULL,
+    mes TINYINT NOT NULL,
+    id_confeccao INT NOT NULL,
+    qtd_pedidos INT NOT NULL,
+    valor_bruto DECIMAL(12,2) NOT NULL,
+    taxa_percentual DECIMAL(5,2) NOT NULL DEFAULT 10.00,
+    valor_taxa DECIMAL(12,2) NOT NULL,
+    valor_liquido DECIMAL(12,2) NOT NULL,
+    fech_status VARCHAR(10) NOT NULL DEFAULT 'A_PAGAR',
+    data_fechamento DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (ano, mes, id_confeccao),
+    INDEX idx_fech_status (fech_status, ano, mes),
+    FOREIGN KEY (id_confeccao) REFERENCES confeccao (id_confeccao) ON DELETE RESTRICT,
+    CONSTRAINT chk_fech_mes     CHECK (mes BETWEEN 1 AND 12),
+    CONSTRAINT chk_fech_status  CHECK (fech_status IN ('A_PAGAR','PAGO')),
+    CONSTRAINT chk_fech_valores CHECK (valor_bruto >= 0 AND valor_taxa >= 0 AND valor_liquido >= 0),
+    CONSTRAINT chk_fech_contabil CHECK (valor_bruto = valor_taxa + valor_liquido)
+);
+
 CREATE OR REPLACE VIEW vw_lancamentos AS
 SELECT l.id_lancamento,
        l.mes_referencia,
@@ -279,6 +313,7 @@ LEFT JOIN (
     WHERE pe.ped_status <> 'CANCELADO'
     GROUP BY c.id_cidade
 ) p ON p.id_cidade = ci.id_cidade;
+
 
 INSERT INTO cidade (id_cidade, nome, uf, polo_destaque) VALUES
 (1, 'Recife', 'PE', 0),
@@ -461,11 +496,24 @@ INSERT INTO produto (id_produto, nome, preco, id_confeccao) VALUES
 (4, 'Bermuda jeans lavada', 95.00, 6),
 (5, 'Blusa de croche', 70.00, 7);
 
+INSERT INTO pedido_item
+(id_item_pedido, id_pedido, id_produto, quantidade, preco_unitario) VALUES
+(1, 1, 1, 3, 80.00),
+(2, 2, 1, 2, 80.00),
+(3, 5, 4, 10, 95.00),
+(4, 6, 5, 6, 70.00),
+(5, 7, 3, 2, 250.00),
+(6, 8, 2, 4, 120.00),
+(7, 9, 4, 5, 95.00),
+(8, 10, 5, 8, 70.00);
+
+
 DROP PROCEDURE IF EXISTS inserir_lancamento;
 DROP PROCEDURE IF EXISTS atualizar_lancamento;
 DROP PROCEDURE IF EXISTS cancelar_lancamento;
 DROP PROCEDURE IF EXISTS excluir_lancamento;
 DROP PROCEDURE IF EXISTS gerar_relatorio_regional;
+DROP PROCEDURE IF EXISTS sp_fechamento_mensal_artesao;
 
 DELIMITER $$
 CREATE PROCEDURE inserir_lancamento(
@@ -597,10 +645,78 @@ BEGIN
 END $$
 DELIMITER ;
 
+DELIMITER $$
+CREATE PROCEDURE sp_fechamento_mensal_artesao(
+    IN p_ano INT,
+    IN p_mes INT
+)
+BEGIN
+    DECLARE v_inicio DATE;
+    DECLARE v_fim DATE;
+    DECLARE v_taxa DECIMAL(5,2) DEFAULT 10.00;
+
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        ROLLBACK;
+        RESIGNAL;
+    END;
+
+    IF p_ano IS NULL OR p_mes IS NULL OR p_mes NOT BETWEEN 1 AND 12 OR p_ano < 2000 THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Ano ou mes invalido.';
+    END IF;
+
+    SET v_inicio = STR_TO_DATE(CONCAT(p_ano, '-', p_mes, '-01'), '%Y-%m-%d');
+    SET v_fim    = DATE_ADD(v_inicio, INTERVAL 1 MONTH);
+
+    IF EXISTS (SELECT 1 FROM fechamento_comissao WHERE ano = p_ano AND mes = p_mes) THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Mes ja fechado: fechamento nao pode ser repetido.';
+    END IF;
+
+    START TRANSACTION;
+
+    INSERT INTO fechamento_comissao
+    (ano, mes, id_confeccao, qtd_pedidos, valor_bruto, taxa_percentual,
+     valor_taxa, valor_liquido, fech_status)
+    SELECT p_ano, p_mes, t.id_confeccao, t.qtd_pedidos, t.bruto, v_taxa,
+           ROUND(t.bruto * v_taxa / 100, 2),
+           t.bruto - ROUND(t.bruto * v_taxa / 100, 2),
+           'A_PAGAR'
+    FROM (
+        SELECT pe.id_confeccao,
+               COUNT(DISTINCT pe.id_pedido) AS qtd_pedidos,
+               SUM(pit.quantidade * pit.preco_unitario) AS bruto
+        FROM pedido pe
+        INNER JOIN pedido_item pit ON pit.id_pedido = pe.id_pedido
+        WHERE pe.ped_status = 'ENTREGUE'
+          AND pe.data_entrega >= v_inicio
+          AND pe.data_entrega <  v_fim
+        GROUP BY pe.id_confeccao
+    ) t;
+
+    IF ROW_COUNT() = 0 THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Sem pedidos entregues no mes: fechamento nao gerado.';
+    END IF;
+
+    COMMIT;
+
+    SELECT c.nome AS artesao, f.qtd_pedidos, f.valor_bruto,
+           f.valor_taxa, f.valor_liquido, f.fech_status
+    FROM fechamento_comissao f
+    INNER JOIN confeccao c ON c.id_confeccao = f.id_confeccao
+    WHERE f.ano = p_ano AND f.mes = p_mes
+    ORDER BY f.valor_liquido DESC;
+END $$
+DELIMITER ;
+
+
 DROP TRIGGER IF EXISTS trg_log_lancamento_update;
 DROP TRIGGER IF EXISTS trg_log_lancamento_delete;
 DROP TRIGGER IF EXISTS trg_avaliacao_pedido_entregue;
 DROP TRIGGER IF EXISTS trg_audita_preco_produto;
+DROP TRIGGER IF EXISTS trg_pedido_item_artesao;
 
 DELIMITER $$
 CREATE TRIGGER trg_log_lancamento_update
@@ -670,6 +786,20 @@ BEGIN
     SET NEW.justificativa_preco = NULL;
 END $$
 DELIMITER ;
+
+DELIMITER $$
+CREATE TRIGGER trg_pedido_item_artesao
+BEFORE INSERT ON pedido_item
+FOR EACH ROW
+BEGIN
+    IF (SELECT id_confeccao FROM produto WHERE id_produto = NEW.id_produto)
+       <> (SELECT id_confeccao FROM pedido WHERE id_pedido = NEW.id_pedido) THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Produto nao pertence ao artesao do pedido.';
+    END IF;
+END $$
+DELIMITER ;
+
 
 CALL inserir_lancamento('2026-03-15', 360, 25200.00, 4, 4);
 SET @id_novo = LAST_INSERT_ID();
@@ -756,6 +886,8 @@ VALUES ('TENDENCIA', '2025-01-01', '2025-03-31', 5.00, 2);
 
 ROLLBACK;
 SELECT * FROM relatorio;
+
+CALL sp_fechamento_mensal_artesao(2026, 2);
 
 DROP PROCEDURE IF EXISTS teste_trigger_audita_preco;
 
@@ -848,6 +980,102 @@ DELIMITER ;
 CALL teste_trigger_audita_preco();
 DROP PROCEDURE teste_trigger_audita_preco;
 
+DROP PROCEDURE IF EXISTS teste_fechamento_outubro;
+
+DELIMITER $$
+CREATE PROCEDURE teste_fechamento_outubro()
+BEGIN
+    DECLARE v_i INT DEFAULT 1;
+    DECLARE v_id INT;
+    DECLARE v_base INT DEFAULT NULL;
+    DECLARE v_pedidos INT;
+    DECLARE v_bruto DECIMAL(12,2);
+    DECLARE v_taxa DECIMAL(12,2);
+    DECLARE v_liq DECIMAL(12,2);
+    DECLARE v_extrato_ok INT;
+    DECLARE v_erro VARCHAR(255) DEFAULT NULL;
+
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        IF v_base IS NOT NULL THEN
+            DELETE FROM fechamento_comissao WHERE ano = 2026 AND mes = 10;
+            DELETE FROM pedido_item WHERE id_pedido > v_base;
+            DELETE FROM pedido WHERE id_pedido > v_base;
+        END IF;
+        RESIGNAL;
+    END;
+
+    IF EXISTS (SELECT 1 FROM fechamento_comissao WHERE ano = 2026 AND mes = 10) THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Teste exige outubro/2026 ainda nao fechado.';
+    END IF;
+
+    SELECT COALESCE(MAX(id_pedido), 0) INTO v_base FROM pedido;
+
+    WHILE v_i <= 15 DO
+        INSERT INTO pedido (data_pedido, ped_status, data_entrega, id_usuario, id_confeccao)
+        VALUES ('2026-10-05 10:00:00', 'ENTREGUE',
+                CONCAT('2026-10-', LPAD(v_i + 5, 2, '0'), ' 12:00:00'),
+                2, IF(v_i <= 10, 3, 9));
+        SET v_id = LAST_INSERT_ID();
+        INSERT INTO pedido_item (id_pedido, id_produto, quantidade, preco_unitario)
+        VALUES (v_id, IF(v_i <= 10, 1, 2), IF(v_i <= 10, 2, 1), IF(v_i <= 10, 80.00, 120.00));
+        SET v_i = v_i + 1;
+    END WHILE;
+
+    INSERT INTO pedido (data_pedido, ped_status, data_entrega, id_usuario, id_confeccao)
+    VALUES ('2026-10-20 10:00:00', 'CANCELADO', NULL, 2, 3);
+    SET v_id = LAST_INSERT_ID();
+    INSERT INTO pedido_item (id_pedido, id_produto, quantidade, preco_unitario)
+    VALUES (v_id, 1, 1, 80.00);
+
+    INSERT INTO pedido (data_pedido, ped_status, data_entrega, id_usuario, id_confeccao)
+    VALUES ('2026-10-28 10:00:00', 'ENTREGUE', '2026-11-03 10:00:00', 2, 3);
+    SET v_id = LAST_INSERT_ID();
+    INSERT INTO pedido_item (id_pedido, id_produto, quantidade, preco_unitario)
+    VALUES (v_id, 1, 1, 80.00);
+
+    CALL sp_fechamento_mensal_artesao(2026, 10);
+
+    SELECT qtd_pedidos, valor_bruto, valor_taxa, valor_liquido
+      INTO v_pedidos, v_bruto, v_taxa, v_liq
+    FROM fechamento_comissao
+    WHERE ano = 2026 AND mes = 10 AND id_confeccao = 3;
+
+    SELECT (COUNT(*) = 2
+            AND SUM(qtd_pedidos) = 15
+            AND SUM(valor_bruto) = 2200.00
+            AND SUM(valor_taxa) = 220.00
+            AND SUM(valor_liquido) = 1980.00
+            AND SUM(fech_status = 'A_PAGAR') = 2)
+      INTO v_extrato_ok
+    FROM fechamento_comissao
+    WHERE ano = 2026 AND mes = 10;
+
+    BEGIN
+        DECLARE CONTINUE HANDLER FOR SQLEXCEPTION
+        BEGIN
+            GET DIAGNOSTICS CONDITION 1 v_erro = MESSAGE_TEXT;
+        END;
+        CALL sp_fechamento_mensal_artesao(2026, 10);
+    END;
+
+    DELETE FROM fechamento_comissao WHERE ano = 2026 AND mes = 10;
+    DELETE FROM pedido_item WHERE id_pedido > v_base;
+    DELETE FROM pedido WHERE id_pedido > v_base;
+
+    SELECT IF(v_pedidos = 10 AND v_bruto = 1600.00 AND v_taxa = 160.00
+              AND v_liq = 1440.00 AND v_extrato_ok = 1, 'OK', 'FALHA')
+               AS resultado_fechamento_outubro,
+           IF(v_erro = 'Mes ja fechado: fechamento nao pode ser repetido.', 'OK', 'FALHA')
+               AS resultado_bloqueio_duplicidade;
+END $$
+DELIMITER ;
+
+CALL teste_fechamento_outubro();
+DROP PROCEDURE teste_fechamento_outubro;
+
+
 SELECT * FROM cidade;
 SELECT * FROM confeccao;
 SELECT * FROM usuario;
@@ -862,6 +1090,8 @@ SELECT * FROM pedido;
 SELECT * FROM avaliacoes_artesao;
 SELECT * FROM produto;
 SELECT * FROM historico_preco_produto;
+SELECT * FROM pedido_item;
+SELECT * FROM fechamento_comissao;
 
 SELECT
     (SELECT COUNT(*) FROM cidade)            AS total_cidades,
@@ -871,7 +1101,9 @@ SELECT
     (SELECT COUNT(*) FROM lancamento_mensal) AS total_lancamentos,
     (SELECT COUNT(*) FROM entrevista)        AS total_entrevistas,
     (SELECT COUNT(*) FROM pedido)            AS total_pedidos,
-    (SELECT COUNT(*) FROM avaliacoes_artesao) AS total_avaliacoes;
+    (SELECT COUNT(*) FROM avaliacoes_artesao) AS total_avaliacoes,
+    (SELECT COUNT(*) FROM pedido_item)       AS total_itens_pedido,
+    (SELECT COUNT(*) FROM fechamento_comissao) AS total_fechamentos;
 
 SELECT
     SUM(faturamento) AS faturamento_total,
@@ -895,7 +1127,9 @@ SELECT 'lancamento.origem', origem, COUNT(*) FROM lancamento_mensal GROUP BY ori
 UNION ALL
 SELECT 'lancamento.status', lanc_status, COUNT(*) FROM lancamento_mensal GROUP BY lanc_status
 UNION ALL
-SELECT 'pedido.status', ped_status, COUNT(*) FROM pedido GROUP BY ped_status;
+SELECT 'pedido.status', ped_status, COUNT(*) FROM pedido GROUP BY ped_status
+UNION ALL
+SELECT 'fechamento.status', fech_status, COUNT(*) FROM fechamento_comissao GROUP BY fech_status;
 
 SELECT 'usuario sem confeccao' AS caso, COUNT(*) AS qtd FROM usuario WHERE id_confeccao IS NULL
 UNION ALL
@@ -957,6 +1191,7 @@ ORDER BY nota_media DESC;
 
 SELECT * FROM vw_vendas_polo_regional
 ORDER BY faturamento_total DESC;
+
 
 SELECT c.nome AS confeccao, ci.nome AS cidade, ci.uf, u.nome AS usuario, u.email
 FROM confeccao c
@@ -1031,6 +1266,31 @@ INNER JOIN confeccao c ON c.id_confeccao = p.id_confeccao
 LEFT JOIN usuario u    ON u.id_usuario = h.alterado_por
 ORDER BY h.data_alteracao, h.id;
 
+SELECT f.ano, f.mes, c.nome AS artesao, ci.nome AS cidade, ci.uf,
+       f.qtd_pedidos, f.valor_bruto, f.taxa_percentual,
+       f.valor_taxa, f.valor_liquido, f.fech_status, f.data_fechamento
+FROM fechamento_comissao f
+INNER JOIN confeccao c ON c.id_confeccao = f.id_confeccao
+INNER JOIN cidade ci   ON ci.id_cidade = c.id_cidade
+ORDER BY f.ano, f.mes, f.valor_liquido DESC;
+
+SELECT ano, mes,
+       SUM(qtd_pedidos)   AS pedidos,
+       SUM(valor_bruto)   AS bruto_total,
+       SUM(valor_taxa)    AS taxa_plataforma,
+       SUM(valor_liquido) AS liquido_a_repassar
+FROM fechamento_comissao
+GROUP BY ano, mes
+ORDER BY ano, mes;
+
+SELECT pe.id_confeccao,
+       SUM(pit.quantidade * pit.preco_unitario) AS bruto_pedidos
+FROM pedido pe
+INNER JOIN pedido_item pit ON pit.id_pedido = pe.id_pedido
+WHERE pe.ped_status = 'ENTREGUE'
+  AND pe.data_entrega >= '2026-02-01' AND pe.data_entrega < '2026-03-01'
+GROUP BY pe.id_confeccao;
+
 SELECT municipio, uf, faturamento_total, volume_itens, qtd_pedidos, ticket_medio_item
 FROM vw_vendas_polo_regional
 WHERE polo_destaque = 1
@@ -1054,6 +1314,8 @@ ORDER BY pedidos_no_periodo DESC;
 SHOW INDEX FROM pedido;
 SHOW INDEX FROM confeccao;
 SHOW INDEX FROM lancamento_mensal;
+SHOW INDEX FROM pedido_item;
+SHOW INDEX FROM fechamento_comissao;
 
 EXPLAIN SELECT * FROM vw_vendas_polo_regional;
 
