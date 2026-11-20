@@ -8,6 +8,12 @@ Cada versão tem uma tag anotada no Git (`git tag -l -n9` lista todas).
 
 ## [Não lançado]
 
+### Adicionado
+- Backup lógico agendado (`scripts/backup_database.sh`): dump compactado `.sql.gz` com timestamp, validação do arquivo gerado e expurgo de backups com mais de 7 dias (DB-07).
+- Teste de restauração (`scripts/restore_test.sh`): restaura o backup em um banco temporário e valida tabelas, views, rotinas e triggers (DB-07).
+- Modelo de configuração `scripts/backup.env.example`, pasta `backups/` e arquivos `.gitignore` e `.gitattributes` (DB-07).
+- Procedimento de backup, teste de restore e recuperação no README (DB-07).
+
 ## [0.3.1] - 2026-10-27
 
 ### Alterado
