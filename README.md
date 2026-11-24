@@ -280,6 +280,8 @@ O `consultas.sql` traz 10 consultas que juntam as tabelas com `INNER JOIN` e `LE
 | [transacoes.sql](database/transacoes.sql) | Transações de importação e de geração de relatório (`COMMIT`, `ROLLBACK`, `SAVEPOINT`) |
 | [selects.sql](database/selects.sql) | Consulta de todos os registros de cada tabela |
 | [consultas.sql](database/consultas.sql) | Consultas com `INNER JOIN`, `LEFT JOIN`, `GROUP BY`, `COUNT`, `AVG`, `MAX` e `MIN` |
+| [seed_demonstracao_projetaí.sql](database/seed_demonstracao_projetaí.sql) | Massa de dados fictícia do polo têxtil para o ProjetAÍ e a view `vw_serie_polo_regional` |
+| [teste_demonstracao_projetai.sql](database/teste_demonstracao_projetai.sql) | 12 casos de teste da massa de demonstração; não altera os dados |
 | [backup_database.sh](scripts/backup_database.sh) | Backup lógico compactado (`.sql.gz`) com timestamp e expurgo de backups com mais de 7 dias |
 | [restore_test.sh](scripts/restore_test.sh) | Teste de restauração do backup em um banco temporário |
 | [backup.env.example](scripts/backup.env.example) | Modelo de configuração do backup (copie para `backup.env`, que não é versionado) |
@@ -305,6 +307,21 @@ mysql -u root -p < database/consultas.sql
 ```
 
 Para recomeçar do zero, apague o banco antes com `DROP DATABASE confeccoes;`.
+
+### Massa de demonstração (ProjetAÍ)
+
+Depois de criar o banco, rode a carga e confira:
+
+```bash
+mysql -u root -p --default-character-set=utf8mb4 < database/seed_demonstracao_projetaí.sql
+mysql -u root -p < database/teste_demonstracao_projetai.sql
+```
+
+São **dados fictícios**: 12 confecções de Caruaru, Toritama e Santa Cruz do Capibaribe (ids 9001 a 9012, nome iniciado por `Demo`, sem CNPJ) e 408 lançamentos, de novembro/2024 a outubro/2026. Há picos em maio/junho e em novembro/dezembro e, na comparação dos últimos 12 meses com os 12 anteriores, categorias em alta (Jeans e Fitness), em queda (Moda Masculina e Praia) e estáveis (Moda Feminina e Moda Infantil).
+
+- `vw_vendas_polo_regional` traz o total por município, sem mês. A carga cria a `vw_serie_polo_regional`, com faturamento, itens e variação mês a mês, e o teste confere que a soma da série bate com a view.
+- Rodar a carga de novo não duplica nada. Se algo falhar, ela desfaz tudo.
+- Se `lancamento_mensal` tiver `fonte_dado` (ou `origem_dado`) e `nome_fonte`, a carga preenche as colunas e identifica a fonte como fictícia.
 
 Pelo **MySQL Workbench**: abra cada arquivo em *File → Open SQL Script* e execute (⚡), na mesma ordem.
 
