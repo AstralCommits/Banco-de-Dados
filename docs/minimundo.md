@@ -37,6 +37,7 @@ O **lançamento mensal** é o registro central do sistema. Ele informa quantas p
 - O mês é sempre guardado como o dia 1 daquele mês.
 - Cada confecção só pode ter **um** lançamento por categoria em cada mês.
 - O lançamento pode ser digitado à mão (origem **MANUAL**) ou vir de uma planilha (origem **IMPORTACAO**). Quando vem de planilha, fica ligado à importação que o gerou.
+- Todo lançamento informa a **fonte do dado**: **ENTREVISTA**, **QUESTIONARIO** ou **FONTE_SECUNDARIA**, e pode trazer o **nome da fonte**.
 - Um lançamento errado pode ser **cancelado**. Ele continua guardado no banco, com status CANCELADO, mas deixa de contar nos indicadores e relatórios. Lançamentos válidos têm status ATIVO.
 - Toda alteração ou exclusão de lançamento fica registrada num **histórico (log)**, com os valores de antes da mudança e a data.
 
@@ -86,6 +87,7 @@ Comparar a categoria percebida com as vendas reais mostra se o empresário conhe
 | RN09 | A entrevista registra a categoria que o empresário acha que mais vende, que pode ficar em branco. |
 | RN10 | Todo relatório tem pelo menos um item. |
 | RN11 | Toda alteração ou exclusão de lançamento fica registrada no histórico. |
+| RN13 | Todo lançamento informa a fonte do dado: entrevista, questionário ou fonte secundária. |
 
 ## 5. Requisitos funcionais
 

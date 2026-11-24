@@ -8,6 +8,12 @@ Cada versão tem uma tag anotada no Git (`git tag -l -n9` lista todas).
 
 ## [Não lançado]
 
+### Corrigido
+- Acentos gravados errado quando o cliente MySQL não usa UTF-8, como no Docker (`Fonte não informada` virava `Fonte nÃ£o informada`): `banco_completo.sql`, `schema.sql`, `seed_demonstracao_projetaí.sql` e a migração `V0_4_0__fonte_dado_nome_fonte.sql` passam a começar com `SET NAMES utf8mb4`.
+
+### Alterado
+- **Incompatível (compatibilização com a API):** `lancamento_mensal` ganha `fonte_dado` (obrigatória) e `nome_fonte`, as colunas que a entidade `LancamentoMensal` do Back-end usa. `inserir_lancamento` recebe a fonte do dado como último parâmetro, e `vw_lancamentos` mostra as duas colunas. Bancos já criados usam `database/migracoes/V0_4_0__fonte_dado_nome_fonte.sql`.
+
 ### Adicionado
 - Massa de dados fictícia do polo têxtil para o ProjetAÍ (`seed_demonstracao_projetaí.sql`), view `vw_serie_polo_regional` com a série mensal por município e `teste_demonstracao_projetai.sql` com 12 casos (DEMO-DB-01).
 - Backup lógico agendado (`scripts/backup_database.sh`): dump compactado `.sql.gz` com timestamp, validação do arquivo gerado e expurgo de backups com mais de 7 dias (DB-07).

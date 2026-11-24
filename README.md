@@ -33,7 +33,7 @@ erDiagram
 | **Confecção** | id_confeccao | nome, cnpj (opcional), porte (micro, pequena, média), tipo (confecção, facção) |
 | **Usuário** | id_usuario | nome, email, senha_hash, perfil (ADMIN, CONFECCAO) |
 | **Categoria** | id_categoria | nome |
-| **Lançamento mensal** | id_lancamento | mes_referencia, quantidade, faturamento, origem (MANUAL, IMPORTACAO), status (ATIVO, CANCELADO) |
+| **Lançamento mensal** | id_lancamento | mes_referencia, quantidade, faturamento, origem (MANUAL, IMPORTACAO), fonte_dado (ENTREVISTA, QUESTIONARIO, FONTE_SECUNDARIA), nome_fonte, status (ATIVO, CANCELADO) |
 | **Importação** | id_importacao | nome_arquivo, data_importacao, qtd_linhas, status (CONCLUIDA, ERRO) |
 | **Cenário de concorrência** | id_cenario | nome, percentual_impacto, descricao (opcional) |
 | **Entrevista** | id_entrevista | data, resumo, achou_algo_novo (sim, não) |
@@ -100,6 +100,8 @@ erDiagram
         int     quantidade
         decimal faturamento
         varchar origem "MANUAL | IMPORTACAO"
+        varchar fonte_dado "ENTREVISTA | QUESTIONARIO | FONTE_SECUNDARIA"
+        varchar nome_fonte
         varchar lanc_status "ATIVO | CANCELADO"
         int     id_confeccao FK
         int     id_categoria FK
@@ -229,12 +231,13 @@ A numeração segue o [minimundo](docs/minimundo.md).
 | RN09 | Entrevista registra a categoria que o empresário *acha* que mais vende | `id_categoria_percebida` aceita NULL |
 | RN10 | Todo relatório tem pelo menos um item | Transação em `transacoes.sql` faz `ROLLBACK` se nenhum item for gerado |
 | RN11 | Toda alteração ou exclusão de lançamento fica no histórico | Triggers `trg_log_lancamento_update` e `trg_log_lancamento_delete` |
+| RN13 | Todo lançamento informa a fonte do dado: entrevista, questionário ou fonte secundária (RF04 do SRS) | `fonte_dado NOT NULL` com `CHECK chk_lanc_fonte`; `nome_fonte` identifica a coleta |
 
 ## Procedures
 
 | Procedure | Parâmetros | O que faz |
 |---|---|---|
-| `inserir_lancamento` | mês, quantidade, faturamento, confecção, categoria | Grava um lançamento MANUAL e ATIVO; qualquer dia do mês vira dia 1 |
+| `inserir_lancamento` | mês, quantidade, faturamento, confecção, categoria, fonte do dado | Grava um lançamento MANUAL e ATIVO; qualquer dia do mês vira dia 1 |
 | `atualizar_lancamento` | id do lançamento, quantidade, faturamento | Corrige quantidade e faturamento |
 | `cancelar_lancamento` | id do lançamento | Muda o status para CANCELADO, sem apagar (RN04) |
 | `excluir_lancamento` | id do lançamento | Apaga o lançamento de vez |
@@ -280,6 +283,7 @@ O `consultas.sql` traz 10 consultas que juntam as tabelas com `INNER JOIN` e `LE
 | [transacoes.sql](database/transacoes.sql) | Transações de importação e de geração de relatório (`COMMIT`, `ROLLBACK`, `SAVEPOINT`) |
 | [selects.sql](database/selects.sql) | Consulta de todos os registros de cada tabela |
 | [consultas.sql](database/consultas.sql) | Consultas com `INNER JOIN`, `LEFT JOIN`, `GROUP BY`, `COUNT`, `AVG`, `MAX` e `MIN` |
+| [V0_4_0__fonte_dado_nome_fonte.sql](database/migracoes/V0_4_0__fonte_dado_nome_fonte.sql) | Migração para bancos já criados: acrescenta `fonte_dado` e `nome_fonte` sem apagar dados |
 | [seed_demonstracao_projetaí.sql](database/seed_demonstracao_projetaí.sql) | Massa de dados fictícia do polo têxtil para o ProjetAÍ e a view `vw_serie_polo_regional` |
 | [teste_demonstracao_projetai.sql](database/teste_demonstracao_projetai.sql) | 12 casos de teste da massa de demonstração; não altera os dados |
 | [backup_database.sh](scripts/backup_database.sh) | Backup lógico compactado (`.sql.gz`) com timestamp e expurgo de backups com mais de 7 dias |
