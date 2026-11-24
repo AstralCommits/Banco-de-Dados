@@ -1,3 +1,5 @@
+SET NAMES utf8mb4;
+
 USE confeccoes;
 
 ALTER TABLE lancamento_mensal
