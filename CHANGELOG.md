@@ -15,6 +15,9 @@ Cada versão tem uma tag anotada no Git (`git tag -l -n9` lista todas).
 - Modelo de configuração `scripts/backup.env.example`, pasta `backups/` e arquivos `.gitignore` e `.gitattributes` (DB-07).
 - Procedimento de backup, teste de restore e recuperação no README (DB-07).
 
+### Corrigido
+- As senhas dos usuários de exemplo passam a ser BCrypt, o formato que a API confere; antes, o login respondia 401. Bancos já criados usam `database/migracoes/V0_4_1__senhas_bcrypt.sql`.
+
 ## [0.3.1] - 2026-10-27
 
 ### Alterado

@@ -340,12 +340,12 @@ INSERT INTO confeccao
 
 INSERT INTO usuario
 (id_usuario, nome, email, senha_hash, perfil, id_confeccao) VALUES
-(1, 'Administrador', 'admin@confeccoes.com', 'HASH_ADMIN_123', 'ADMIN', NULL),
-(2, 'Ana Silva', 'ana@modarecife.com', 'HASH_ANA_123', 'EMPRESARIO', 1),
-(3, 'Bruno Santos', 'bruno@estiloagreste.com', 'HASH_BRUNO_123', 'EMPRESARIO', 2),
-(4, 'Carla Oliveira', 'carla@costuranordeste.com', 'HASH_CARLA_123', 'EMPRESARIO', 3),
-(5, 'Daniel Lima', 'daniel@paraibafashion.com', 'HASH_DANIEL_123', 'EMPRESARIO', 4),
-(6, 'Eduarda Costa', 'eduarda@alagoastextil.com', 'HASH_EDUARDA_123', 'EMPRESARIO', 5);
+(1, 'Administrador', 'admin@confeccoes.com', '$2a$10$RUHpWKL8l/MbvAtM6ieBSuaxvvBDVQqw6A2UiAlZUpOmWYKlzWkFi', 'ADMIN', NULL),
+(2, 'Ana Silva', 'ana@modarecife.com', '$2a$10$dS3G2eqaYwRL8yZaR105iufic/MmQ.dmRObzykhRgvrt6xL2u6QiK', 'EMPRESARIO', 1),
+(3, 'Bruno Santos', 'bruno@estiloagreste.com', '$2a$10$tzffyS3CASpBkKWhoiORAONZG8yIrXR0FJ5Ons2eX.K5OfC0F88o6', 'EMPRESARIO', 2),
+(4, 'Carla Oliveira', 'carla@costuranordeste.com', '$2a$10$I2IHsshvvutHa9eUjSZ64.B2ml3o6nRt/fU2FjT4hCqIPpkZk3xL.', 'EMPRESARIO', 3),
+(5, 'Daniel Lima', 'daniel@paraibafashion.com', '$2a$10$yXxDfFNef572wcUQHGhBPevG0EcHJ8Y5M/.6z.cZ0zvgu7z.BY60K', 'EMPRESARIO', 4),
+(6, 'Eduarda Costa', 'eduarda@alagoastextil.com', '$2a$10$dDKa.urDOEn8LNfbPevWKuR.fxUtQysSCCAYjrzJRvhFsxpaSgeie', 'EMPRESARIO', 5);
 
 INSERT INTO categoria (id_categoria, nome) VALUES
 (1, 'Moda Feminina'),
