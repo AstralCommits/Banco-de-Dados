@@ -61,6 +61,8 @@ CREATE TABLE lancamento_mensal (
     quantidade INT NOT NULL,
     faturamento DECIMAL(12,2) NOT NULL,
     origem VARCHAR(10) NOT NULL,
+    fonte_dado VARCHAR(20) NOT NULL,
+    nome_fonte VARCHAR(200) NOT NULL DEFAULT 'Fonte não informada',
     lanc_status VARCHAR(10) NOT NULL DEFAULT 'ATIVO',
     id_confeccao INT NOT NULL,
     id_categoria INT NOT NULL,
@@ -73,6 +75,7 @@ CREATE TABLE lancamento_mensal (
     FOREIGN KEY (id_importacao) REFERENCES importacao (id_importacao),
     CONSTRAINT chk_lanc_dia1      CHECK (DAY(mes_referencia) = 1),
     CONSTRAINT chk_lanc_origem    CHECK (origem IN ('MANUAL','IMPORTACAO')),
+    CONSTRAINT chk_lanc_fonte     CHECK (fonte_dado IN ('ENTREVISTA','QUESTIONARIO','FONTE_SECUNDARIA')),
     CONSTRAINT chk_lanc_status    CHECK (lanc_status IN ('ATIVO','CANCELADO')),
     CONSTRAINT chk_lanc_quant     CHECK (quantidade >= 0),
     CONSTRAINT chk_lanc_fatur     CHECK (faturamento >= 0),
@@ -255,6 +258,8 @@ SELECT l.id_lancamento,
        l.quantidade,
        l.faturamento,
        l.origem,
+       l.fonte_dado,
+       l.nome_fonte,
        l.lanc_status,
        c.id_confeccao,
        c.nome AS confeccao,
@@ -363,36 +368,36 @@ INSERT INTO importacao
 
 INSERT INTO lancamento_mensal
 (id_lancamento, mes_referencia, quantidade, faturamento, origem, lanc_status,
- id_confeccao, id_categoria, id_importacao) VALUES
+ id_confeccao, id_categoria, id_importacao, fonte_dado) VALUES
 
-(1, '2026-01-01', 450, 31500.00, 'IMPORTACAO', 'ATIVO', 1, 1, 1),
-(2, '2026-01-01', 280, 19600.00, 'MANUAL', 'ATIVO', 1, 2, NULL),
-(3, '2026-02-01', 510, 35700.00, 'IMPORTACAO', 'ATIVO', 1, 1, 1),
+(1, '2026-01-01', 450, 31500.00, 'IMPORTACAO', 'ATIVO', 1, 1, 1, 'QUESTIONARIO'),
+(2, '2026-01-01', 280, 19600.00, 'MANUAL', 'ATIVO', 1, 2, NULL, 'ENTREVISTA'),
+(3, '2026-02-01', 510, 35700.00, 'IMPORTACAO', 'ATIVO', 1, 1, 1, 'QUESTIONARIO'),
 
-(4, '2026-01-01', 220, 13200.00, 'IMPORTACAO', 'ATIVO', 2, 1, 2),
-(5, '2026-01-01', 180, 10800.00, 'MANUAL', 'ATIVO', 2, 3, NULL),
-(6, '2026-02-01', 250, 15000.00, 'IMPORTACAO', 'ATIVO', 2, 1, 2),
+(4, '2026-01-01', 220, 13200.00, 'IMPORTACAO', 'ATIVO', 2, 1, 2, 'QUESTIONARIO'),
+(5, '2026-01-01', 180, 10800.00, 'MANUAL', 'ATIVO', 2, 3, NULL, 'FONTE_SECUNDARIA'),
+(6, '2026-02-01', 250, 15000.00, 'IMPORTACAO', 'ATIVO', 2, 1, 2, 'QUESTIONARIO'),
 
-(7, '2026-01-01', 160, 9600.00, 'IMPORTACAO', 'ATIVO', 3, 2, 3),
-(8, '2026-02-01', 190, 11400.00, 'MANUAL', 'ATIVO', 3, 2, NULL),
+(7, '2026-01-01', 160, 9600.00, 'IMPORTACAO', 'ATIVO', 3, 2, 3, 'QUESTIONARIO'),
+(8, '2026-02-01', 190, 11400.00, 'MANUAL', 'ATIVO', 3, 2, NULL, 'ENTREVISTA'),
 
-(9, '2026-01-01', 300, 21000.00, 'IMPORTACAO', 'ATIVO', 4, 4, 4),
-(10, '2026-02-01', 340, 23800.00, 'MANUAL', 'ATIVO', 4, 4, NULL),
+(9, '2026-01-01', 300, 21000.00, 'IMPORTACAO', 'ATIVO', 4, 4, 4, 'QUESTIONARIO'),
+(10, '2026-02-01', 340, 23800.00, 'MANUAL', 'ATIVO', 4, 4, NULL, 'FONTE_SECUNDARIA'),
 
-(11, '2026-01-01', 390, 27300.00, 'MANUAL', 'ATIVO', 5, 5, NULL),
-(12, '2026-02-01', 420, 29400.00, 'MANUAL', 'ATIVO', 5, 5, NULL),
+(11, '2026-01-01', 390, 27300.00, 'MANUAL', 'ATIVO', 5, 5, NULL, 'ENTREVISTA'),
+(12, '2026-02-01', 420, 29400.00, 'MANUAL', 'ATIVO', 5, 5, NULL, 'ENTREVISTA'),
 
-(13, '2026-01-01', 520, 31200.00, 'MANUAL', 'ATIVO', 6, 2, NULL),
-(14, '2026-02-01', 610, 36600.00, 'MANUAL', 'ATIVO', 6, 2, NULL),
+(13, '2026-01-01', 520, 31200.00, 'MANUAL', 'ATIVO', 6, 2, NULL, 'ENTREVISTA'),
+(14, '2026-02-01', 610, 36600.00, 'MANUAL', 'ATIVO', 6, 2, NULL, 'ENTREVISTA'),
 
-(15, '2026-01-01', 480, 28800.00, 'MANUAL', 'ATIVO', 7, 1, NULL),
-(16, '2026-02-01', 530, 31800.00, 'MANUAL', 'ATIVO', 7, 1, NULL),
+(15, '2026-01-01', 480, 28800.00, 'MANUAL', 'ATIVO', 7, 1, NULL, 'FONTE_SECUNDARIA'),
+(16, '2026-02-01', 530, 31800.00, 'MANUAL', 'ATIVO', 7, 1, NULL, 'ENTREVISTA'),
 
-(17, '2026-01-01', 90, 7200.00, 'MANUAL', 'ATIVO', 8, 3, NULL),
-(18, '2026-02-01', 110, 8800.00, 'MANUAL', 'ATIVO', 8, 3, NULL),
+(17, '2026-01-01', 90, 7200.00, 'MANUAL', 'ATIVO', 8, 3, NULL, 'ENTREVISTA'),
+(18, '2026-02-01', 110, 8800.00, 'MANUAL', 'ATIVO', 8, 3, NULL, 'ENTREVISTA'),
 
-(19, '2026-01-01', 60, 4800.00, 'MANUAL', 'ATIVO', 9, 3, NULL),
-(20, '2026-02-01', 75, 6000.00, 'MANUAL', 'ATIVO', 9, 3, NULL);
+(19, '2026-01-01', 60, 4800.00, 'MANUAL', 'ATIVO', 9, 3, NULL, 'ENTREVISTA'),
+(20, '2026-02-01', 75, 6000.00, 'MANUAL', 'ATIVO', 9, 3, NULL, 'FONTE_SECUNDARIA');
 
 INSERT INTO cenario_concorrencia
 (id_cenario, nome, percentual_impacto, descricao, id_usuario, id_categoria) VALUES
@@ -523,15 +528,16 @@ CREATE PROCEDURE inserir_lancamento(
     IN p_quantidade INT,
     IN p_faturamento DECIMAL(12,2),
     IN p_id_confeccao INT,
-    IN p_id_categoria INT
+    IN p_id_categoria INT,
+    IN p_fonte_dado VARCHAR(20)
 )
 BEGIN
     INSERT INTO lancamento_mensal
-    (mes_referencia, quantidade, faturamento, origem, lanc_status,
+    (mes_referencia, quantidade, faturamento, origem, fonte_dado, lanc_status,
      id_confeccao, id_categoria, id_importacao)
     VALUES
     (DATE_FORMAT(p_mes_referencia, '%Y-%m-01'), p_quantidade, p_faturamento,
-     'MANUAL', 'ATIVO', p_id_confeccao, p_id_categoria, NULL);
+     'MANUAL', p_fonte_dado, 'ATIVO', p_id_confeccao, p_id_categoria, NULL);
 END $$
 DELIMITER ;
 
@@ -805,7 +811,7 @@ DELIMITER ;
 
 USE confeccoes;
 
-CALL inserir_lancamento('2026-03-15', 360, 25200.00, 4, 4);
+CALL inserir_lancamento('2026-03-15', 360, 25200.00, 4, 4, 'ENTREVISTA');
 SET @id_novo = LAST_INSERT_ID();
 SELECT * FROM lancamento_mensal WHERE id_lancamento = @id_novo;
 CALL atualizar_lancamento(10, 350, 24500.00);
@@ -825,10 +831,10 @@ VALUES ('vendas_marco_modarecife.csv', 2, 'CONCLUIDA', 2);
 SET @id_importacao = LAST_INSERT_ID();
 
 INSERT INTO lancamento_mensal
-(mes_referencia, quantidade, faturamento, origem, lanc_status,
+(mes_referencia, quantidade, faturamento, origem, fonte_dado, lanc_status,
  id_confeccao, id_categoria, id_importacao) VALUES
-('2026-03-01', 530, 37100.00, 'IMPORTACAO', 'ATIVO', 1, 1, @id_importacao),
-('2026-03-01', 300, 21000.00, 'IMPORTACAO', 'ATIVO', 1, 2, @id_importacao);
+('2026-03-01', 530, 37100.00, 'IMPORTACAO', 'QUESTIONARIO', 'ATIVO', 1, 1, @id_importacao),
+('2026-03-01', 300, 21000.00, 'IMPORTACAO', 'QUESTIONARIO', 'ATIVO', 1, 2, @id_importacao);
 
 COMMIT;
 
@@ -841,9 +847,9 @@ VALUES ('vendas_marco_estiloagreste.csv', 1, 'CONCLUIDA', 3);
 SET @id_importacao = LAST_INSERT_ID();
 
 INSERT INTO lancamento_mensal
-(mes_referencia, quantidade, faturamento, origem, lanc_status,
+(mes_referencia, quantidade, faturamento, origem, fonte_dado, lanc_status,
  id_confeccao, id_categoria, id_importacao) VALUES
-('2026-03-01', 270, 16200.00, 'IMPORTACAO', 'ATIVO', 2, 1, @id_importacao);
+('2026-03-01', 270, 16200.00, 'IMPORTACAO', 'QUESTIONARIO', 'ATIVO', 2, 1, @id_importacao);
 
 ROLLBACK;
 

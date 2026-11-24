@@ -8,6 +8,9 @@ Cada versão tem uma tag anotada no Git (`git tag -l -n9` lista todas).
 
 ## [Não lançado]
 
+### Alterado
+- **Incompatível (compatibilização com a API):** `lancamento_mensal` ganha `fonte_dado` (obrigatória) e `nome_fonte`, as colunas que a entidade `LancamentoMensal` do Back-end usa. `inserir_lancamento` recebe a fonte do dado como último parâmetro, e `vw_lancamentos` mostra as duas colunas. Bancos já criados usam `database/migracoes/V0_4_0__fonte_dado_nome_fonte.sql`.
+
 ### Adicionado
 - Backup lógico agendado (`scripts/backup_database.sh`): dump compactado `.sql.gz` com timestamp, validação do arquivo gerado e expurgo de backups com mais de 7 dias (DB-07).
 - Teste de restauração (`scripts/restore_test.sh`): restaura o backup em um banco temporário e valida tabelas, views, rotinas e triggers (DB-07).
