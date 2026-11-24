@@ -325,6 +325,12 @@ São **dados fictícios**: 12 confecções de Caruaru, Toritama e Santa Cruz do 
 
 Pelo **MySQL Workbench**: abra cada arquivo em *File → Open SQL Script* e execute (⚡), na mesma ordem.
 
+## Usuários de demonstração
+
+Os usuários dos dados de exemplo entram na API com a senha `TramaDemo2026`, guardada em BCrypt com um sal por usuário. O e-mail de cada um está no `inserts.sql`: o `admin@confeccoes.com` é ADMIN e os demais são EMPRESARIO.
+
+**Só para desenvolvimento e demonstração.** A senha é pública: não use estes usuários em um banco exposto na internet. Para atualizar um banco já criado, sem apagar dados, rode `database/migracoes/V0_4_1__senhas_bcrypt.sql`, que só muda as senhas antigas de exemplo.
+
 ## Backup e recuperação
 
 Os scripts ficam em `scripts/` e os backups em `backups/` (`confeccoes_AAAAMMDD_HHMMSS.sql.gz`).
